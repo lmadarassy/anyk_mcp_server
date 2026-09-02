@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "anyk": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "java",
+        "-Danyk.home=/ELERESI/UT/AZ/abevjava",
+        "-cp",
+        "/ELERESI/UT/anyk-mcp-server/build/install/anyk-mcp-server/lib/*:/ELERESI/UT/AZ/abevjava/abevjava.jar",
+        "hu.anyk.mcp.AnykMcpServer"
+      ]
+    }
+  }
+}

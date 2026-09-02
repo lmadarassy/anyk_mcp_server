@@ -19,6 +19,13 @@ public class AnykMcpServer {
     public static void main(String[] args) {
         System.setProperty("java.awt.headless", "true");
 
+        // FONTOS: az MCP stdio transport tiszta stdout-ot igenyel a JSON-RPC-hez.
+        // Az ANYK osztalyok viszont sokat irnak a System.out-ra (fnBetoltErtek, stb.).
+        // Ezert elmentjuk a valodi stdout-ot az MCP-nek, es a System.out-ot stderr-re
+        // iranyitjuk, hogy az ANYK zaj ne rontsa el a protokollt.
+        java.io.PrintStream realStdout = System.out;
+        System.setOut(System.err);
+
         // ANYK telepitesi konyvtar feloldasa - sorrend:
         // 1. -Danyk.home rendszervaltozo  2. ANYK_HOME env  3. ANYK_ROOT env  4. elso argumentum
         String anykRoot = firstNonEmpty(
@@ -43,7 +50,9 @@ public class AnykMcpServer {
         SessionManager sessionManager = new SessionManager(config);
         TaxpayerStore taxpayerStore = new TaxpayerStore(anykRoot);
 
-        StdioServerTransportProvider transport = new StdioServerTransportProvider(McpJsonDefaults.getMapper());
+        // A valodi stdout-ot adjuk az MCP transportnak (nem a stderr-re iranyitottat)
+        StdioServerTransportProvider transport = new StdioServerTransportProvider(
+            McpJsonDefaults.getMapper(), System.in, realStdout);
 
         McpSyncServer server = McpServer.sync(transport)
             .serverInfo("anyk-mcp-server", "0.1.0")
