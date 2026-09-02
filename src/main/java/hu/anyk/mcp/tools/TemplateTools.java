@@ -246,7 +246,7 @@ public class TemplateTools {
 
         for (File f : files) {
             try {
-                BookModel bm = BookModelAdapter.loadTemplate(f);
+                BookModel bm = BookModelAdapter.loadHead(f);
                 Map<String, Object> info = new LinkedHashMap<>();
                 info.put("id", bm.id != null ? bm.id : "");
                 info.put("name", bm.name != null ? bm.name : "");
@@ -255,9 +255,7 @@ public class TemplateTools {
                     info.put("version", bm.docinfo.get("ver"));
                     info.put("org", bm.docinfo.get("org"));
                 }
-                info.put("formCount", bm.forms != null ? bm.forms.size() : 0);
                 info.put("helpAvailable", bm.help != null && !bm.help.isEmpty());
-                bm.destroy();
                 results.add(info);
             } catch (Exception e) {
                 Map<String, Object> info = new LinkedHashMap<>();

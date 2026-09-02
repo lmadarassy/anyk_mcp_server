@@ -21,6 +21,21 @@ public class AnykConfig {
         new File(getUpgradePath()).mkdirs();
 
         PropertyListInitializer.ensureInitialized(anykRoot);
+
+        if (!hasResources()) {
+            System.err.println("FIGYELMEZTETES: az eroforrasok/ konyvtar nem talalhato itt: "
+                + getResourcesPath()
+                + "\n  A szervezeti eroforrasok (NAVResources.jar stb.) nelkul a Calculator es a"
+                + " nyomtatvany-betoltes nem mukodik helyesen."
+                + "\n  Az ANYK_ROOT egy valos ANYK telepitesre mutasson (ami tartalmazza az eroforrasok/-t).");
+        }
+    }
+
+    public boolean hasResources() {
+        File dir = new File(getResourcesPath());
+        if (!dir.isDirectory()) return false;
+        File[] jars = dir.listFiles((d, n) -> n.matches(".*Resources.*\\.jar"));
+        return jars != null && jars.length > 0;
     }
 
     public String getAnykRoot() {

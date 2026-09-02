@@ -55,7 +55,7 @@ public class FormTools {
                     }
 
                     BookModel bm = BookModelAdapter.loadTemplate(templateFile);
-                    BookModelAdapter.addEmptyForm(bm, 0);
+                    BookModelAdapter.addEmptyForm(bm);
 
                     FormSession session = sessionManager.createSession();
                     session.setBookModel(bm);

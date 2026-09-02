@@ -2,7 +2,9 @@
 
 ## 1. Áttekintés
 
-Az ÁNYK MCP Server egy Java alkalmazás, amely MCP (Model Context Protocol) interfészen keresztül teszi lehetővé magyar adónyomtatványok AI-alapú kitöltését. Az eredeti ÁNYK (Általános Nyomtatványkitöltő) alkalmazás `abevjava.jar` osztályait használja fel headless módban, kiegészítve saját adapter réteggel a GUI-függőségek kikerülésére.
+Az ÁNYK MCP Server egy Java alkalmazás, amely MCP (Model Context Protocol) interfészen keresztül teszi lehetővé magyar adónyomtatványok AI-alapú kitöltését. Az eredeti ÁNYK (Általános Nyomtatványkitöltő) alkalmazás `abevjava.jar` osztályait használja fel headless módban.
+
+**Alapelv:** amit lehet, az eredeti `abevjava.jar`-ból használunk. Saját kód csak ott van, ahol a jar GUI-hoz vagy hálózati infrastruktúrához kötött (init property-k, NAV letöltés), illetve teljesen új funkcióknál (profil tárolás, form elemzés).
 
 ### Architektúra
 
@@ -14,244 +16,189 @@ AI Agent (Claude, stb.)
 ÁNYK MCP Server (Java 21)
     |
     +-- MCP SDK 1.1.4 (io.modelcontextprotocol)
-    +-- abevjava.jar (eredeti ÁNYK osztályok)
-    +-- Adapter réteg (saját implementáció)
+    +-- abevjava.jar (eredeti ÁNYK osztályok - üzleti logika)
+    +-- Vékony adapter réteg (init + új funkciók)
     |
     +-- NAV szerver (template + segédlet letöltés)
     +-- Helyi fájlrendszer (mentés, profil tárolás)
 ```
 
-## 2. Az abevjava.jar-ból használt osztályok
+### Fontos: valós ÁNYK telepítés szükséges
 
-### 2.1 Template betöltés és form modell
+Az `ANYK_ROOT` egy **valós ÁNYK telepítésre** kell mutasson, amely tartalmazza az `eroforrasok/` könyvtárat a szervezeti erőforrás JAR-okkal (`NAVResources_vX.jar`, `APEHResources_vX.jar`, `VPOPResources_vX.jar`). Ezek nélkül a `Calculator` és a nyomtatvány-betöltés nem működik.
+
+## 2. Az abevjava.jar-ból használt osztályok (a lényegi logika)
 
 | Osztály | Csomag | Mire használjuk |
 |---------|--------|-----------------|
-| `BookModel` | `hu.piller.enykp.gui.model` | Nyomtatvány sablon betöltése SAX parserrel. A `load(File)` metódust hívjuk, ami beolvassa a `.tem.enyk` fájlt és felépíti a form/page/field hierarchiát. |
-| `FormModel` | `hu.piller.enykp.gui.model` | Egy űrlaptípus modellje. A `fids` (Hashtable) tartalmazza az összes mező definíciót, a `pages` (Vector) az oldalakat. |
-| `PageModel` | `hu.piller.enykp.gui.model` | Egy oldal modellje. A `y_sorted_df` tartalmazza a mezőket Y-koordináta szerint, a `z_sorted_vf` a vizuális elemeket (címkéket). |
-| `DataFieldModel` | `hu.piller.enykp.gui.model` | Egy mező definíciója: `key` (fid), `type`, `readonly`, `features` (mask, len, values, stb.), `x/y/w/h` koordináták. |
-| `VisualFieldModel` | `hu.piller.enykp.gui.model` | Vizuális címke elem. A `text` és `getOriginalBounds()` alapján rendeljük össze a mezőkkel (geometriai közelség). |
+| `BookModel` | `gui.model` | **Teljes** nyomtatvány betöltés az eredeti `BookModel(File, silent)` konstruktorral. Ez lefuttatja a `makeempty()`-t: SAX parse + `CachedCollection` + `Calculator` + `MetaInfo` inicializálás. |
+| `BookModel.addForm()` | `gui.model` | Új üres nyomtatvány-példány létrehozása (Elem + GUI_Datastore), Calculator eseménnyel és betöltési számításokkal. |
+| `BookModel.getHeadData()` | `gui.model` | Gyors, fejléc-only betöltés (`onlyhead=true`) listázáshoz, Calculator nélkül. |
+| `FormModel`, `PageModel`, `DataFieldModel`, `VisualFieldModel` | `gui.model` | Form struktúra: űrlapok, oldalak, mezők, címkék. |
+| `GUI_Datastore` | `datastore` | Mező értékek írása/olvasása `set(Object[], String)` / `get(Object[])` metódusokkal (`{Integer pageIndex, String fieldId}` kulcs). |
+| `CachedCollection`, `Elem` | `datastore` | Nyomtatvány-példányok gyűjteménye. |
+| `Calculator` / `CalculatorManager` | `alogic.calculator` | **Számított mezők**: összevont adóalap, adó, fizetendő adó automatikus kiszámítása. A `form_calc()` futtatja. |
+| `DataChecker` | `alogic.fileutil` | Validáció: `superCheck(BookModel, true)` teljes ellenőrzés, `checkField(...)` egy mező. |
+| `EnykXmlSaver` | `alogic.filesaver.xml` | **Mentés**: az eredeti XML export a helyes `<nyomtatvanyok>` formátumban, validációval, SHA-1 hash-sel, checkbox konverzióval. |
+| `OrgInfo` / `OrgResource` | `alogic.orghandler` | Szervezeti erőforrások betöltése az `eroforrasok/` JAR-okból (a `prop.sys.root` alapján). |
+| `SettingsStore` | `alogic.settingspanel` | A mentési könyvtár beállítása (`gui/digitális_aláírás`), amit az `EnykXmlSaver.getDsPath()` használ. |
+| `PropertyList` | `util.base` | Konfigurációs singleton + fájlformátum konstansok. |
+| `MainFrame.role` | `gui.framework` | Adózói szerep (statikus mező, `"0"` = adózó). |
 
-### 2.2 Adattárolás
-
-| Osztály | Mire használjuk |
-|---------|-----------------|
-| `GUI_Datastore` | Mező értékek tárolása. A `set(Object[], String)` és `get(Object[])` metódusokkal írjuk/olvassuk a mezőket `{Integer pageIndex, String fieldId}` kulccsal. |
-| `CachedCollection` | Nyomtatvány-példányok gyűjteménye. Minden példány egy `Elem` objektum, ami egy `GUI_Datastore`-t tartalmaz. |
-| `Elem` | Egy nyomtatvány-példány wrapere. A `getRef()` adja vissza a `GUI_Datastore`-t. |
-
-### 2.3 Validáció
-
-| Osztály | Mire használjuk |
-|---------|-----------------|
-| `DataChecker` | Singleton (`getInstance()`). A `superCheck(BookModel, boolean)` teljes validációt futtat, a `checkField(...)` egyetlen mezőt ellenőriz. |
-
-### 2.4 PropertyList
-
-| Osztály | Mire használjuk |
-|---------|-----------------|
-| `PropertyList` | Singleton konfiguráció tár. Az `getInstance()` hívással inicializáljuk, majd `set()`/`get()` metódusokkal töltjük fel a szükséges property-ket (debug, path-ok, GUI paraméterek). |
-
-### 2.5 Fájlformátum konstansok
-
-| Osztály | Mire használjuk |
-|---------|-----------------|
-| `PropertyList` (konstansok) | `TEMPLATE_SUFFIX` (`.tem.enyk`), `INNER_DATA_SUFFIX` (`.frm.enyk`), `XML_DATA_SUFFIX` (`.xml`), `PROGRAM_VERSION`, `UTF_ENCODING` stb. |
-
-### Összefoglalás: abevjava.jar-ból használt funkciók
+### Teljes workflow — csupa eredeti osztály
 
 ```
-Template betöltés:  BookModel.load(File)          ✅ Működik headless módban
-Form struktúra:     FormModel/PageModel/DFM       ✅ Működik
-Adattárolás:        GUI_Datastore.set()/get()     ✅ Működik (Object[] formátummal)
-Validáció:          DataChecker.superCheck()       ✅ Működik (alapvető)
-PropertyList:       PropertyList.getInstance()     ✅ Működik (manuális init után)
+BookModel(File, silent)          -> template + Calculator + MetaInfo init   [eredeti]
+BookModel.addForm(mainForm)      -> üres példány, betöltési számítások       [eredeti]
+GUI_Datastore.set(...)           -> mező kitöltés                            [eredeti]
+CalculatorManager.form_calc()    -> számított mezők (adó, adóalap)           [eredeti]
+DataChecker.superCheck(...)      -> validáció                                [eredeti]
+EnykXmlSaver.save(...)           -> mentés XML-be, hash-sel                  [eredeti]
 ```
 
-## 3. Saját implementáció (ami az abevjava.jar-ból NEM használható)
+**Bizonyított működés (2553 SZJA teszt):** 20M Ft bérjövedelemre a Calculator kiszámolta a 3M Ft adót, az `EnykXmlSaver` érvényes 4606 byte-os XML-t mentett, a `DataChecker` 0 hibát jelzett.
 
-### 3.1 BookModelAdapter - Template betöltés headless módban
+## 3. Saját implementáció (csak a szükséges minimum)
 
-**Probléma:** A `BookModel(File)` konstruktor a `makeempty()` metódusban `OrgResource`-t próbál betölteni (szervezeti erőforrás JAR), ami nincs jelen. Emiatt `hasError=true` lesz és a `CachedCollection` nem jön létre.
+### 3.1 PropertyListInitializer — init property-k beállítása
 
-**Megoldás:** `BookModelAdapter.loadTemplate(File)`:
-1. `new BookModel()` (üres konstruktor)
-2. `bm.load(templateFile)` - SAX parse (ez működik)
-3. Manuálisan létrehozza a `CachedCollection`-t, `maxcreation[]`-t és `created[]`-t
-4. `addEmptyForm()` - létrehoz egy `Elem`-et üres `GUI_Datastore`-ral
+**Miért kell:** GUI-módban az `InitApplication` tölti fel a `PropertyList` singletont és állítja be a `MainFrame.role`-t. Headless módban ezt nekünk kell megtenni.
 
-**Miért nem az eredeti:** A `BookModel.addForm()` meghívja a `CachedCollection.setActiveObject()`-et, ami a `Calculator.eventFired()`-ot hívja - de a Calculator null, mert a `makeempty()` nem futott le. A `Calculator` inicializálásához az `OrgResource` és `MetaInfo` singletonok kellenének.
+**Mit csinál:**
+- Beállítja a `prop.sys.root`-ot a valós ÁNYK telepítésre (így az `OrgInfo` megtalálja az `eroforrasok/`-t)
+- `prop.usr.*` path-ok (settings, saves, kr, tmp, log)
+- GUI méret property-k (a fejléc-számításokhoz)
+- `MainFrame.role = "0"` (adózó)
+- `setSaveDir()`: a `SettingsStore` mentési könyvtár beállítása az `EnykXmlSaver`-hez
 
-### 3.2 SimpleXmlSaver - Mentés ÁNYK formátumban
+Ez **nem** párhuzamos implementáció — csak azt az init lépést pótolja, amit normál esetben a GUI indítás végez el. Utána minden az eredeti jar logikán fut.
 
-**Probléma:** Az `EnykXmlSaver` konstruktora a `HeadChecker.getHeadData()`-t hívja, ami a `MetaInfo.getMetaStore()`-t, ami null, mert a `MetaInfo.init()` nem futott (ez is a `makeempty()`-ben történne).
+### 3.2 BookModelAdapter — vékony wrapper
 
-**Megoldás:** `SimpleXmlSaver.save(BookModel, String)`:
-- Az ÁNYK `.frm.enyk` formátumot állítja elő:
-  ```xml
-  <file>
-    <head filetype="zn1810">
-      <type>single</type>
-      <saved>YYYYMMDDHHmmssSSS</saved>
-      <docinfo name="..." id="..." ver="..." org="..." ... />
-    </head>
-    <nyomtatvanyok xmlns="http://www.apeh.hu/abev/nyomtatvanyok/2005/01" template="...">
-      <abev>...</abev>
-      <nyomtatvany sn="0">
-        <nyomtatvanyinformacio>...</nyomtatvanyinformacio>
-        <mezok>
-          <mezo eazon="0_FID">érték</mezo>
-          ...
-        </mezok>
-      </nyomtatvany>
-    </nyomtatvanyok>
-  </file>
-  ```
-- A fájlnév generálás: `{formId}_{adóazonosító}_{Név}_{timestamp}.frm.enyk`
+**Mit csinál:** az eredeti `BookModel(File)` konstruktort és `addForm()` metódust hívja. Nincs benne párhuzamos betöltési logika — csak kényelmi metódusok:
+- `loadTemplate(File)` → `new BookModel(file, true)` + hibaellenőrzés
+- `addEmptyForm(bm)` → a `DefaultMultiFormViewer.buid()` logikáját követi (fő űrlap hozzáadása)
+- `loadHead(File)` → gyors fejléc-only betöltés listázáshoz
+- `getActiveDataStore(bm)` → az aktív `Elem` `GUI_Datastore`-ja
 
-**Miért nem az eredeti:** Az `EnykXmlSaver` -> `HeadChecker` -> `MetaInfo` -> `Calculator` lánc túl sok singleton inicializálást igényelne. A `SimpleXmlSaver` közvetlenül a `GUI_Datastore`-ból olvassa ki a mezőértékeket.
+### 3.3 DownloadAdapter — NAV szerver letöltés
 
-### 3.3 DownloadAdapter - NAV szerver letöltés
+**Miért kell:** az ÁNYK letöltő rendszere (`DownloadableComponents`, `UpgradeFormController`) GUI dialógusra épül. Az alacsony szintű `FileDownloader` használható lenne, de a `DownloadAdapter` egyszerűbb: közvetlen HTTP-t használ.
 
-**Probléma:** Az ÁNYK letöltési rendszere (`DownloadableComponents`, `FileDownloader`, `ExtractStage`) az `OrgInfo` singletont és az `UpgradeFormController` GUI dialógust használja.
+**Mit csinál:**
+1. HTTP GET a NAV frissítési URL-re (`https://nav.gov.hu/abev/abev_new` — ez az `orginfo.xml` `updateurl` attribútumából származik)
+2. SAX parse az `enyk.xml`-ből (`<nyomtatvany>/<utmutato>/<keretprogram>`)
+3. JAR letöltés + kicsomagolás a `nyomtatvanyok/` és `segitseg/` könyvtárakba
 
-**Megoldás:** `DownloadAdapter`:
-1. HTTP GET a NAV frissítési URL-re (`https://nav.gov.hu/abev/abev_new`)
-2. SAX parse az `enyk.xml` válaszból (`<adat>` -> `<nyomtatvany>/<utmutato>/<keretprogram>`)
-3. JAR letöltés az `<url>` + `<file>` alapján
-4. JAR kicsomagolás: `application/nyomtatvanyok/` -> `{root}/nyomtatvanyok/`, `application/segitseg/` -> `{root}/segitseg/`
+### 3.4 TaxpayerStore — adózói profil tárolás
 
-**Miért nem az eredeti:** Az `OrgInfo.getUpgradeURLAllOrganizations()` az `OrgResource` JAR-okból olvassa ki a frissítési URL-t, de az `OrgResource` betöltéséhez a teljes ÁNYK installációra lenne szükség. A `DownloadAdapter` közvetlenül a NAV publikus URL-jét használja.
+**Teljesen új funkció** (nincs ÁNYK megfelelője): JSON fájlban több személy alapadatait tárolja, és automatikusan kitölti a nyomtatvány azonosító/cím/bankszámla mezőit.
 
-### 3.4 PropertyListInitializer - ÁNYK singleton inicializálás
+### 3.5 FormAnalyzerTool + StructureMapper — új segédfunkciók
 
-**Probléma:** Sok ÁNYK osztály a `PropertyList.getInstance().get("prop.xxx")` hívást használja. Az `InitApplication` osztály tölti fel ezeket GUI-módban.
-
-**Megoldás:** `PropertyListInitializer.ensureInitialized(anykRoot)`:
-- Beállítja a minimálisan szükséges property-ket: `prop.dynamic.debug`, `prop.usr.root`, `prop.sys.root`, GUI méretek stb.
-
-### 3.5 TaxpayerStore - Adózói profil tárolás
-
-**Teljesen új funkció** (nincs ÁNYK megfelelője):
-- JSON fájlban (`taxpayers.json`) tárolja az adózói profilokat
-- Több személy adatait kezeli (név, adóazonosító, cím, bankszámla, stb.)
-- A `taxpayer_apply_to_form` tool automatikusan kitölti a nyomtatvány azonosító/cím/bankszámla mezőit a profilból
-
-### 3.6 FormAnalyzerTool - Nyomtatvány elemzés
-
-**Teljesen új funkció**:
-- Kategorizálja a mezőket: azonosítás, személyi adatok, lakcím, bevallási időszak, bankszámla, összeg mezők, nyilatkozatok
-- A segédlet HTML-t plain textre konvertálja (Jsoup)
-- Megmondja, mit kell kérdezni a felhasználótól és mit lehet profilból kitölteni
-
-### 3.7 StructureMapper - Mező-címke összerendelés
-
-**Teljesen új funkció**:
-- A `VisualFieldModel` (címkék) és `DataFieldModel` (mezők) geometriai pozíciója alapján rendeli össze a címkéket a mezőkkel
-- Balra lévő és felette lévő címkéket is figyelembe veszi távolságszámítással
+**Teljesen új funkciók:**
+- `FormAnalyzerTool`: kategorizálja a mezőket és megmondja, mit kell kérdezni a felhasználótól
+- `StructureMapper`: a `VisualFieldModel` címkéket geometriai pozíció alapján rendeli a mezőkhöz
+- HTML segédlet → plain text konverzió (Jsoup)
 
 ## 4. Összefoglaló táblázat
 
-| Funkció | abevjava.jar | Saját implementáció | Megjegyzés |
-|---------|:---:|:---:|------------|
-| Template SAX parse | ✅ | | `BookModel.load(File)` |
-| Form/Page/Field modell | ✅ | | `FormModel`, `PageModel`, `DataFieldModel` |
-| Mező értékek tárolása | ✅ | | `GUI_Datastore` (Object[] kulccsal) |
-| CachedCollection + Elem | ✅ | | Létrehozás manuális, de az osztályok működnek |
-| Template inicializálás | | ✅ | `BookModelAdapter` (makeempty kikerülése) |
-| Mentés (.frm.enyk) | | ✅ | `SimpleXmlSaver` (EnykXmlSaver nem használható) |
-| NAV letöltés | | ✅ | `DownloadAdapter` (OrgInfo kikerülése) |
-| Validáció | ✅ | | `DataChecker.superCheck()` |
-| PropertyList init | ✅ (tároló) | ✅ (feltöltés) | `PropertyListInitializer` |
-| Címke-mező összerendelés | | ✅ | `StructureMapper` (geometriai) |
-| Adózói profilok | | ✅ | `TaxpayerStore` (JSON) |
-| Form elemzés | | ✅ | `FormAnalyzerTool` |
-| HTML segédlet olvasás | | ✅ | Jsoup + encoding detektálás |
-| Calculator (számított mezők) | ❌ | ❌ | Nem inicializálható OrgResource nélkül |
-| Beküldés (KAU/SOAP) | ❌ | ❌ | Nem implementált (interaktív auth szükséges) |
+| Funkció | Forrás | Megjegyzés |
+|---------|--------|------------|
+| Template betöltés | **abevjava.jar** | `BookModel(File, silent)` — teljes init |
+| Form/Page/Field modell | **abevjava.jar** | `FormModel`, `PageModel`, `DataFieldModel` |
+| Példány létrehozás | **abevjava.jar** | `BookModel.addForm()` |
+| Mező értékek | **abevjava.jar** | `GUI_Datastore` (Object[] kulcs) |
+| Számított mezők | **abevjava.jar** | `CalculatorManager.form_calc()` — MŰKÖDIK |
+| Validáció | **abevjava.jar** | `DataChecker.superCheck()` |
+| Mentés | **abevjava.jar** | `EnykXmlSaver.save()` — helyes formátum + hash |
+| Szervezeti erőforrások | **abevjava.jar** | `OrgInfo` / `OrgResource` |
+| Init property-k | saját (vékony) | `PropertyListInitializer` — a GUI init pótlása |
+| Betöltés wrapper | saját (vékony) | `BookModelAdapter` — csak kényelmi metódusok |
+| NAV letöltés | saját | `DownloadAdapter` — HTTP + JAR kicsomagolás |
+| Adózói profilok | saját (új) | `TaxpayerStore` (JSON) |
+| Form elemzés | saját (új) | `FormAnalyzerTool` |
+| Címke-mező összerendelés | saját (új) | `StructureMapper` (geometriai) |
+| Beküldés (KAU/SOAP) | ❌ | Nem implementált (interaktív auth) |
+
+**Változás a korábbi verzióhoz képest:** a korábbi `SimpleXmlSaver` (saját XML mentés) és a `BookModelAdapter` manuális `makeempty`-kikerülése **megszűnt**. A hiba nem architekturális volt, hanem hiányzó inicializáció: a `prop.sys.root`, `MainFrame.role` és a `SettingsStore` beállítása után az eredeti `BookModel` + `Calculator` + `EnykXmlSaver` teljes egészében működik.
 
 ## 5. MCP Tool-ok (22 db)
 
 ### Template kezelés
 | Tool | Leírás |
 |------|--------|
-| `template_list_installed` | Telepített sablonok listázása |
+| `template_list_installed` | Telepített sablonok (gyors fejléc-only betöltés) |
 | `template_search` | Keresés telepített sablonok között |
-| `template_list_available` | NAV szerveren elérhető sablonok (538 template, 527 segédlet) |
+| `template_list_available` | NAV szerveren elérhető sablonok |
 | `template_download` | Letöltés + telepítés a NAV szerverről |
 
 ### Form műveletek
 | Tool | Leírás |
 |------|--------|
-| `form_open` | Sablon megnyitása, session létrehozása |
+| `form_open` | Sablon megnyitása (Calculator init), session létrehozása |
 | `form_close` | Session bezárása |
-| `form_get_structure` | Mezők struktúrája (típus, címke, szabályok, aktuális érték) |
-| `form_analyze_requirements` | Nyomtatvány elemzés: mit kell kérdezni a felhasználótól |
+| `form_get_structure` | Mezők struktúrája (típus, címke, szabályok, érték) |
+| `form_analyze_requirements` | Nyomtatvány elemzés: mit kell kérdezni |
 
 ### Mező műveletek
 | Tool | Leírás |
 |------|--------|
-| `form_get_field` | Egy mező értékének lekérdezése |
-| `form_set_field` | Egy mező értékének beállítása |
-| `form_set_fields` | Több mező egyszerre (batch) |
-| `form_get_all_fields` | Összes mező értéke |
+| `form_get_field` | Egy mező értéke |
+| `form_set_field` | Egy mező beállítása |
+| `form_set_fields` | Több mező (batch) |
+| `form_get_all_fields` | Összes mező értéke (számított mezőkkel együtt) |
 
 ### Validáció és mentés
 | Tool | Leírás |
 |------|--------|
-| `form_validate` | Teljes validáció |
-| `form_validate_field` | Egyetlen mező validációja |
-| `form_save` | Mentés ÁNYK-kompatibilis `.frm.enyk` formátumban |
+| `form_validate` | Teljes validáció (`DataChecker`) |
+| `form_validate_field` | Egy mező validációja |
+| `form_save` | Mentés az eredeti `EnykXmlSaver`-rel |
 
 ### Segédlet
 | Tool | Leírás |
 |------|--------|
-| `help_get_guide` | Kitöltési útmutató olvasása (HTML -> text) |
+| `help_get_guide` | Kitöltési útmutató (HTML → text) |
 | `help_list_pages` | Segédlet tartalomjegyzék |
 | `help_search` | Keresés a segédletben |
 
 ### Adózói profilok
 | Tool | Leírás |
 |------|--------|
-| `taxpayer_save` | Profil mentése (név, adóazonosító, cím, bankszámla, stb.) |
-| `taxpayer_list` | Összes profil listázása |
+| `taxpayer_save` | Profil mentése |
+| `taxpayer_list` | Profilok listázása |
 | `taxpayer_get` | Profil lekérdezése |
 | `taxpayer_delete` | Profil törlése |
-| `taxpayer_apply_to_form` | Profil alkalmazása nyomtatványra (auto-fill) |
+| `taxpayer_apply_to_form` | Profil alkalmazása nyomtatványra |
 
 ## 6. Ismert korlátozások
 
-1. **Calculator nem működik**: A számított mezők (összegek, adóalapok) nem számítódnak ki automatikusan, mert a `Calculator` inicializálásához `OrgResource` és `MetaInfo` szükséges. Az AI-nak magának kell kiszámolnia ezeket.
+1. **Valós telepítés kell**: az `eroforrasok/` JAR-ok nélkül a Calculator és a betöltés nem működik. Az `AnykConfig.hasResources()` figyelmeztet, ha hiányzik.
 
-2. **EnykXmlSaver nem használható**: A mentés saját implementációval történik. Az XML struktúra megegyezik az ÁNYK formátummal, de a hash számítás és egyes metaadatok eltérhetnek.
+2. **Betöltési sebesség**: a teljes `BookModel` betöltés (Calculator build-del) egy nagy nyomtatványnál (pl. 2553, 4085 mező) néhány másodperc. A listázás ezért gyors fejléc-only betöltést használ.
 
-3. **Beküldés nem támogatott**: A KAU (Központi Azonosítási Ügynök) autentikáció interaktív böngészőt igényel.
+3. **Beküldés nem támogatott**: a KAU (Központi Azonosítási Ügynök) autentikáció interaktív böngészőt igényel.
 
-4. **Dinamikus oldalak**: Csak az első példány (pageIndex=0) kezelt teljes mértékben.
+4. **Dinamikus oldalak**: alapvetően az első példány (pageIndex=0) kezelt.
 
 ## 7. Indítás
 
 ```bash
-# Környezeti változóval
-ANYK_ROOT=/path/to/anyk_data ./gradlew run
+# ANYK_ROOT = valós ÁNYK telepítés (eroforrasok/-kal!)
+ANYK_ROOT=/path/to/abevjava ./gradlew run
 
-# Vagy argumentummal
-./gradlew run --args="/path/to/anyk_data"
+# vagy
+./gradlew run --args="/path/to/abevjava"
 ```
-
-Az `ANYK_ROOT` könyvtárban a szerver létrehozza a szükséges alkönyvtárakat:
-- `nyomtatvanyok/` - telepített sablonok
-- `segitseg/` - kitöltési útmutatók
-- `upgrade/` - staging könyvtár
 
 ## 8. Függőségek
 
 | Függőség | Verzió | Cél |
 |----------|--------|-----|
-| `abevjava.jar` | 3.49.0 | ÁNYK osztályok (template, datastore, validáció) |
-| `io.modelcontextprotocol.sdk:mcp` | 1.1.4 | MCP szerver (stdio transport, tool regisztráció) |
-| `com.google.code.gson:gson` | 2.11.0 | JSON szerializáció (profil tárolás, tool válaszok) |
-| `org.jsoup:jsoup` | 1.18.1 | HTML -> text konverzió (segédlet olvasás) |
+| `abevjava.jar` | 3.49.0 | ÁNYK osztályok (betöltés, Calculator, validáció, mentés) |
+| `io.modelcontextprotocol.sdk:mcp` | 1.1.4 | MCP szerver (stdio) |
+| `com.google.code.gson:gson` | 2.11.0 | JSON (profil, tool válaszok) |
+| `org.jsoup:jsoup` | 1.18.1 | HTML → text (segédlet) |
 | `org.slf4j:slf4j-simple` | 2.0.16 | Naplózás |
 | Java | 21 | Futtatási környezet |
