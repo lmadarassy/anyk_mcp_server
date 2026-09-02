@@ -20,11 +20,20 @@ public class AnykMcpServer {
         System.setProperty("java.awt.headless", "true");
 
         // FONTOS: az MCP stdio transport tiszta stdout-ot igenyel a JSON-RPC-hez.
-        // Az ANYK osztalyok viszont sokat irnak a System.out-ra (fnBetoltErtek, stb.).
-        // Ezert elmentjuk a valodi stdout-ot az MCP-nek, es a System.out-ot stderr-re
-        // iranyitjuk, hogy az ANYK zaj ne rontsa el a protokollt.
+        // Az ANYK osztalyok viszont EZREKET irnak a System.out/System.err-re
+        // (fnBetoltErtek, kalkulator naplok, stb.).
+        //
+        // Ha ezt a stderr-re iranyitjuk, es az MCP kliens (opencode) nem uriti
+        // folyamatosan a gyerekfolyamat stderr-jet, az OS pipe buffere (~64KB)
+        // megtelik, es a kovetkezo write VEGLEGESEN BLOKKOL - pont azon a szalon,
+        // ami a tool-hivast dolgozza -> a szerver befagy, a kerések timeoutolnak.
+        //
+        // Ezert az ANYK zajt egy FAJLBA iranyitjuk (az sosem blokkol tele pipe miatt).
+        // A valodi stdout-ot megtartjuk az MCP JSON-RPC kommunikaciohoz.
         java.io.PrintStream realStdout = System.out;
-        System.setOut(System.err);
+        java.io.PrintStream logStream = openLogStream();
+        System.setOut(logStream);
+        System.setErr(logStream);
 
         // ANYK telepitesi konyvtar feloldasa - sorrend:
         // 1. -Danyk.home rendszervaltozo  2. ANYK_HOME env  3. ANYK_ROOT env  4. elso argumentum
@@ -90,5 +99,24 @@ public class AnykMcpServer {
             if (v != null && !v.isBlank()) return v;
         }
         return null;
+    }
+
+    /**
+     * Log stream az ANYK zajnak. Sorrend: -Danyk.log=... > java.io.tmpdir/anyk-mcp.log.
+     * Ha semmikeppen nem nyithato meg, egy nyelo streamre esunk vissza (soha nem blokkol).
+     */
+    private static java.io.PrintStream openLogStream() {
+        String logPath = System.getProperty("anyk.log");
+        if (logPath == null || logPath.isBlank()) {
+            String tmp = System.getProperty("java.io.tmpdir", ".");
+            logPath = tmp + java.io.File.separator + "anyk-mcp.log";
+        }
+        try {
+            java.io.OutputStream fos = new java.io.FileOutputStream(logPath, true);
+            return new java.io.PrintStream(new java.io.BufferedOutputStream(fos, 32 * 1024), true, "UTF-8");
+        } catch (Exception e) {
+            // Vegso visszaeses: nyelo stream, ami soha nem blokkol es nem dob hibat
+            return new java.io.PrintStream(java.io.OutputStream.nullOutputStream(), false);
+        }
     }
 }
