@@ -50,10 +50,15 @@ public class StructureMapper {
                     if (pm.y_sorted_df != null) {
                         Map<String, String> labelMap = buildLabelMap(pm, fm);
                         GUI_Datastore ds = BookModelAdapter.getActiveDataStore(bm);
+                        // A template META-ja tartalmazza a mezonevet (vid), a torzsadat-
+                        // jelentest (panids) es a kotelezoseget (req). Ez megbizhatobb, mint
+                        // a geometriai cimke-illesztes.
+                        hu.piller.enykp.alogic.metainfo.MetaStore ms =
+                            hu.piller.enykp.alogic.metainfo.MetaInfo.getInstance().getMetaStore(fm.id);
 
                         for (int di = 0; di < pm.y_sorted_df.size(); di++) {
                             DataFieldModel df = (DataFieldModel) pm.y_sorted_df.get(di);
-                            Map<String, Object> fieldMap = mapField(df, fm, ds, labelMap);
+                            Map<String, Object> fieldMap = mapField(df, fm, ds, labelMap, ms);
                             fieldsList.add(fieldMap);
                         }
                     }
@@ -70,10 +75,44 @@ public class StructureMapper {
     }
 
     public static Map<String, Object> mapField(DataFieldModel df, FormModel fm, GUI_Datastore ds, Map<String, String> labelMap) {
+        return mapField(df, fm, ds, labelMap, null);
+    }
+
+    public static Map<String, Object> mapField(DataFieldModel df, FormModel fm, GUI_Datastore ds,
+                                               Map<String, String> labelMap,
+                                               hu.piller.enykp.alogic.metainfo.MetaStore ms) {
         Map<String, Object> fieldMap = new LinkedHashMap<>();
         fieldMap.put("fid", df.key);
         fieldMap.put("type", df.type >= 0 && df.type < TYPE_NAMES.length ? TYPE_NAMES[df.type] : "unknown");
-        fieldMap.put("label", labelMap != null ? labelMap.getOrDefault(df.key, "") : "");
+
+        // A template META-jabol vett attributumok (megbizhatobb, mint a geometriai cimke)
+        String vid = null, panids = null, help = null;
+        boolean required = false;
+        if (ms != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<Object, Object> metas = ms.getFieldMetas(df.key);
+                if (metas != null) {
+                    Object v = metas.get("vid");
+                    if (v != null) vid = v.toString();
+                    Object p = metas.get("panids");
+                    if (p != null) panids = p.toString();
+                    Object h = metas.get("help");
+                    if (h != null) help = h.toString();
+                    Object r = metas.get("req");
+                    if (r != null) required = "True".equalsIgnoreCase(r.toString()) || "true".equalsIgnoreCase(r.toString());
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // label: eloszor a geometriai cimke, ha ures akkor a vid (belso mezonev)
+        String geoLabel = labelMap != null ? labelMap.getOrDefault(df.key, "") : "";
+        String label = (geoLabel != null && !geoLabel.isEmpty()) ? geoLabel : (vid != null ? vid : "");
+        fieldMap.put("label", label);
+        if (vid != null) fieldMap.put("vid", vid);
+        if (panids != null) fieldMap.put("masterDataField", panids);
+        fieldMap.put("required", required);
+        if (help != null) fieldMap.put("helpAnchor", help);
         fieldMap.put("readonly", df.readonly);
 
         if (df.features != null) {
