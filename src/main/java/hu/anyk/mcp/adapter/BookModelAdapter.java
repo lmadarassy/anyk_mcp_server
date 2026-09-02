@@ -136,12 +136,36 @@ public class BookModelAdapter {
      * E nelkul csak a nyers mezo kerul be, a szamitott/propagalt mezok nem
      * (ezert volt korabban sokkal kevesebb mezo a mentett fajlban).
      */
-    public static void setFieldWithCalc(BookModel bm, GUI_Datastore ds,
+    public static void setFieldWithCalc(BookModel bm, GUI_Datastore dsHint,
                                         int pageIndex, String fieldId, String value) {
-        ds.set(new Object[]{Integer.valueOf(pageIndex), fieldId}, value);
+        setFieldWithCalc(bm, pageIndex, fieldId, value);
+    }
 
-        String formId = getActiveFormId(bm);
-        if (formId == null) return;
+    /**
+     * Beallit egy mezot a HELYES dokumentum-peldanyba, es lefuttatja a mezo-szintu
+     * kalkulaciokat (mint az ANYK GUI). Kotegelt nyomtatvanynal (tobb peldany a cc-ben)
+     * automatikusan azt a peldanyt valasztja, amelynek a form-ja tartalmazza a mezot.
+     *
+     * Ez akadalyozza meg, hogy egy A-form mezo tevesen az aktiv M-peldany datastore-jaba
+     * keruljon (arva kod), ami korabban a mentesi NPE-t es a rossz kitoltest okozta.
+     */
+    public static void setFieldWithCalc(BookModel bm, int pageIndex, String fieldId, String value) {
+        int idx = resolveInstanceForField(bm, fieldId);
+        if (idx < 0) {
+            // Nem talaltuk egyik form fids-eben sem - beallitjuk az aktivba (visszaeses)
+            GUI_Datastore ds = getActiveDataStore(bm);
+            if (ds != null) ds.set(new Object[]{Integer.valueOf(pageIndex), fieldId}, value);
+            return;
+        }
+
+        Elem elem = (Elem) bm.cc.get(idx);
+        // A helyes peldanyt allitjuk aktivra (a calc a Calculator aktiv modelljere hat)
+        bm.cc.setActiveObject(elem);
+        bm.setCalcelemindex(idx);
+        GUI_Datastore ds = (GUI_Datastore) elem.getRef();
+        String formId = elem.getType();
+
+        ds.set(new Object[]{Integer.valueOf(pageIndex), fieldId}, value);
 
         var cm = hu.piller.enykp.alogic.calculator.CalculatorManager.getInstance();
         String key = pageIndex + "_" + fieldId;
@@ -159,5 +183,35 @@ public class BookModelAdapter {
         } finally {
             ds.inkihatas = false;
         }
+    }
+
+    /**
+     * Megkeresi, melyik dokumentum-peldany (cc index) form-jaba tartozik a mezo.
+     * Ha az aktiv peldany form-ja tartalmazza, azt reszesiti elonyben (a GUI is az
+     * aktualisan szerkesztett lapra ir). Kulonben az elso olyan peldany, amelynek
+     * form-ja tartalmazza a mezot. -1 ha egyik sem.
+     */
+    public static int resolveInstanceForField(BookModel bm, String fieldId) {
+        if (bm.cc == null || bm.cc.size() == 0) return -1;
+
+        // 1. aktiv peldany elonyben, ha nala van a mezo
+        Object active = bm.cc.getActiveObject();
+        if (active instanceof Elem ae) {
+            FormModel fm = bm.get(ae.getType());
+            if (fm != null && fm.fids != null && fm.fids.get(fieldId) != null) {
+                return bm.cc.getIndex(ae);
+            }
+        }
+        // 2. barmely peldany, amelynek form-ja tartalmazza
+        for (int i = 0; i < bm.cc.size(); i++) {
+            Object o = bm.cc.get(i);
+            if (o instanceof Elem e) {
+                FormModel fm = bm.get(e.getType());
+                if (fm != null && fm.fids != null && fm.fids.get(fieldId) != null) {
+                    return i;
+                }
+            }
+        }
+        return -1;
     }
 }
