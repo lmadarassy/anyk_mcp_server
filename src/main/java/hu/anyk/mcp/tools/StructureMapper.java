@@ -35,7 +35,10 @@ public class StructureMapper {
             if (fm.pages != null) {
                 for (int pi = 0; pi < fm.pages.size(); pi++) {
                     PageModel pm = (PageModel) fm.pages.get(pi);
-                    if (pageId != null && !pageId.equals(pm.pid)) continue;
+                    // A pageId lehet a pid (pl. "0") vagy a nev (pl. "Fõlap") is
+                    if (pageId != null
+                        && !pageId.equals(pm.pid)
+                        && !pageId.equalsIgnoreCase(pm.name)) continue;
 
                     Map<String, Object> pageMap = new LinkedHashMap<>();
                     pageMap.put("id", pm.pid);

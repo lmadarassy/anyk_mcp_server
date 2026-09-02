@@ -193,8 +193,7 @@ public class FieldTools {
               "type": "object",
               "properties": {
                 "sessionId": { "type": "string", "description": "Session azonosito" },
-                "formTypeId": { "type": "string", "description": "Urlap azonosito (opcionalis)" },
-                "pageId": { "type": "string", "description": "Oldal azonosito (opcionalis)" },
+                "formTypeId": { "type": "string", "description": "Urlap azonosito (opcionalis, pl. '25HIPAKA')" },
                 "onlyFilled": { "type": "boolean", "description": "Csak a kitoltott mezoket adja vissza (alapertelmezett: false)" }
               },
               "required": ["sessionId"],
