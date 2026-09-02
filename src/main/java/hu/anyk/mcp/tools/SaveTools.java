@@ -14,6 +14,7 @@ import java.util.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import hu.piller.enykp.gui.model.BookModel;
+import hu.piller.enykp.alogic.filesaver.enykinner.EnykInnerSaver;
 import hu.piller.enykp.alogic.filesaver.xml.EnykXmlSaver;
 
 public class SaveTools {
@@ -30,7 +31,8 @@ public class SaveTools {
               "type": "object",
               "properties": {
                 "sessionId": { "type": "string", "description": "Session azonosito" },
-                "outputPath": { "type": "string", "description": "Kimeneti fajl eleresi utja (.xml). A konyvtar es a fajlnev innen szarmazik." }
+                "outputPath": { "type": "string", "description": "Kimeneti fajl eleresi utja. Alapertelmezetten .frm.enyk (belso ANYK formatum, visszatoltheto ANYK-ba)." },
+                "format": { "type": "string", "enum": ["enyk", "xml"], "description": "enyk = belso .frm.enyk mentesi formatum (alapertelmezett, ez toltheto vissza ANYK-ba); xml = .xml export formatum. Alapertelmezes: enyk" }
               },
               "required": ["sessionId", "outputPath"],
               "additionalProperties": false
@@ -38,41 +40,66 @@ public class SaveTools {
             """;
         return SyncToolSpecification.builder()
             .tool(ToolHelper.tool("form_save",
-                "Menti a kitoltott nyomtatvanyt XML export formatumban az eredeti ANYK EnykXmlSaver-rel (validacioval es SHA-1 hash-sel).",
+                "Menti a kitoltott nyomtatvanyt az eredeti ANYK mentovel. Alapertelmezetten a belso .frm.enyk formatumot hasznalja (EnykInnerSaver), amit az ANYK vissza tud tolteni. A format=xml a .xml export formatumot adja (EnykXmlSaver).",
                 schema).build())
             .callHandler((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String outputPath = (String) request.arguments().get("outputPath");
+                    String format = (String) request.arguments().getOrDefault("format", "enyk");
                     FormSession session = sessionManager.getSession(sessionId);
                     BookModel bm = (BookModel) session.getBookModel();
 
-                    File outFile = new File(outputPath);
-                    File dir = outFile.getParentFile();
-                    if (dir == null) dir = new File(".");
-                    String bareName = outFile.getName();
-                    // A .xml suffixet az EnykXmlSaver adja hozza
-                    if (bareName.toLowerCase().endsWith(".xml")) {
-                        bareName = bareName.substring(0, bareName.length() - 4);
-                    }
-
-                    // Mentesi konyvtar beallitasa (getDsPath ezt hasznalja)
-                    PropertyListInitializer.setSaveDir(dir.getAbsolutePath());
-
-                    EnykXmlSaver saver = new EnykXmlSaver(bm);
-                    boolean ok = saver.save(bareName, true);
-
-                    File produced = new File(dir, bareName + saver.getFileNameSuffix());
-
                     Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("success", ok);
-                    result.put("path", produced.getAbsolutePath());
-                    if (produced.exists()) {
-                        result.put("fileSize", produced.length());
+
+                    if ("xml".equalsIgnoreCase(format)) {
+                        // .xml export - EnykXmlSaver (a mentesi konyvtart a SettingsStore adja)
+                        File outFile = new File(outputPath);
+                        File dir = outFile.getParentFile();
+                        if (dir == null) dir = new File(".");
+                        String bareName = outFile.getName();
+                        if (bareName.toLowerCase().endsWith(".xml")) {
+                            bareName = bareName.substring(0, bareName.length() - 4);
+                        }
+                        PropertyListInitializer.setSaveDir(dir.getAbsolutePath());
+                        EnykXmlSaver saver = new EnykXmlSaver(bm);
+                        boolean ok = saver.save(bareName, true);
+                        File produced = new File(dir, bareName + saver.getFileNameSuffix());
+                        result.put("success", ok);
+                        result.put("format", "xml");
+                        result.put("path", produced.getAbsolutePath());
+                        if (produced.exists()) result.put("fileSize", produced.length());
+                        if (!ok) result.put("message", "A mentes sikertelen. Ellenorizze a validacios hibakat form_validate-tel.");
+                    } else {
+                        // Belso .frm.enyk formatum - EnykInnerSaver
+                        // Abszolut path .frm.enyk vegzodessel -> az EnykInnerSaver kozvetlenul ide ir
+                        File outFile = new File(outputPath).getAbsoluteFile();
+                        String path = outFile.getPath();
+                        if (!path.toLowerCase().endsWith(".frm.enyk")) {
+                            // ha .xml-t adtak de enyk formatumot kernek, csereljuk a suffixet
+                            if (path.toLowerCase().endsWith(".xml")) {
+                                path = path.substring(0, path.length() - 4);
+                            }
+                            path = path + ".frm.enyk";
+                        }
+                        if (outFile.getParentFile() != null) {
+                            outFile.getParentFile().mkdirs();
+                        }
+
+                        EnykInnerSaver saver = new EnykInnerSaver(bm, true);
+                        File saved = saver.save(path, -1);  // -1 = teljes konyv
+
+                        result.put("success", saved != null);
+                        result.put("format", "enyk");
+                        if (saved != null) {
+                            result.put("path", saved.getAbsolutePath());
+                            result.put("fileSize", saved.length());
+                        } else {
+                            result.put("path", path);
+                            result.put("message", "A mentes sikertelen. Ellenorizze a validacios hibakat form_validate-tel.");
+                        }
                     }
-                    if (!ok) {
-                        result.put("message", "A mentes sikertelen. Ellenorizze a validacios hibakat form_validate-tel.");
-                    }
+
                     return CallToolResult.builder()
                         .content(List.of(new McpSchema.TextContent(gson.toJson(result))))
                         .build();
