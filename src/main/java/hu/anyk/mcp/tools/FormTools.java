@@ -26,6 +26,8 @@ public class FormTools {
         server.addTool(openSpec(sessionManager));
         server.addTool(closeSpec(sessionManager));
         server.addTool(structureSpec(sessionManager));
+        server.addTool(listDocTypesSpec(sessionManager));
+        server.addTool(addDocumentSpec(sessionManager));
     }
 
     private static SyncToolSpecification openSpec(SessionManager sessionManager) {
@@ -81,7 +83,10 @@ public class FormTools {
                     result.put("formName", bm.name);
                     result.put("helpAvailable", session.getHelpDir() != null);
 
+                    result.put("mainDocumentId", bm.main_document_id);
+
                     List<Map<String, Object>> formsList = new ArrayList<>();
+                    boolean hasExtraDocs = false;
                     if (bm.forms != null) {
                         for (int i = 0; i < bm.forms.size(); i++) {
                             FormModel fm = (FormModel) bm.forms.get(i);
@@ -89,10 +94,20 @@ public class FormTools {
                             formInfo.put("id", fm.id);
                             formInfo.put("name", fm.name);
                             formInfo.put("pageCount", fm.pages != null ? fm.pages.size() : 0);
+                            boolean isMain = fm.id.equals(bm.main_document_id);
+                            formInfo.put("isMain", isMain);
+                            int maxc = i < bm.maxcreation.length ? bm.maxcreation[i] : 1;
+                            formInfo.put("maxCreation", maxc);
+                            formInfo.put("added", isMain); // csak a fo dokumentum jon letre automatikusan
+                            if (!isMain) hasExtraDocs = true;
                             formsList.add(formInfo);
                         }
                     }
                     result.put("forms", formsList);
+                    if (hasExtraDocs) {
+                        result.put("note", "Kotegelt nyomtatvany: csak a fo dokumentum (isMain=true) jott letre. "
+                            + "A tovabbi dokumentumokat (pl. onkormanyzati fedolap) a form_add_document tool-lal add hozza.");
+                    }
 
                     return CallToolResult.builder()
                         .content(List.of(new McpSchema.TextContent(gson.toJson(result))))
@@ -163,6 +178,95 @@ public class FormTools {
                     BookModel bm = (BookModel) session.getBookModel();
 
                     Map<String, Object> result = StructureMapper.mapStructure(bm, formTypeId, pageId);
+                    return CallToolResult.builder()
+                        .content(List.of(new McpSchema.TextContent(gson.toJson(result))))
+                        .build();
+                } catch (Exception e) {
+                    return errorResult(e.getMessage());
+                }
+            })
+            .build();
+    }
+
+    private static SyncToolSpecification listDocTypesSpec(SessionManager sessionManager) {
+        String schema = """
+            {
+              "type": "object",
+              "properties": {
+                "sessionId": { "type": "string", "description": "Session azonosito" }
+              },
+              "required": ["sessionId"],
+              "additionalProperties": false
+            }
+            """;
+        return SyncToolSpecification.builder()
+            .tool(ToolHelper.tool("form_list_document_types",
+                "Listazza a nyomtatvanyban elerheto dokumentumtipusokat (fo dokumentum + tovabbi lapok, pl. kotegelt fedolap). Megmutatja melyik a fo (isMain) es melyikbol hozhato letre tobb (maxCreation).",
+                schema).build())
+            .callHandler((exchange, request) -> {
+                try {
+                    String sessionId = (String) request.arguments().get("sessionId");
+                    FormSession session = sessionManager.getSession(sessionId);
+                    BookModel bm = (BookModel) session.getBookModel();
+
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("mainDocumentId", bm.main_document_id);
+                    result.put("documentTypes", BookModelAdapter.listDocumentTypes(bm));
+
+                    // aktualis peldanyok a cc-ben
+                    List<Map<String, Object>> instances = new ArrayList<>();
+                    if (bm.cc != null) {
+                        for (int i = 0; i < bm.cc.size(); i++) {
+                            Object o = bm.cc.get(i);
+                            if (o instanceof hu.piller.enykp.datastore.Elem elem) {
+                                Map<String, Object> inst = new LinkedHashMap<>();
+                                inst.put("index", i);
+                                inst.put("type", elem.getType());
+                                instances.add(inst);
+                            }
+                        }
+                    }
+                    result.put("instances", instances);
+                    return CallToolResult.builder()
+                        .content(List.of(new McpSchema.TextContent(gson.toJson(result))))
+                        .build();
+                } catch (Exception e) {
+                    return errorResult(e.getMessage());
+                }
+            })
+            .build();
+    }
+
+    private static SyncToolSpecification addDocumentSpec(SessionManager sessionManager) {
+        String schema = """
+            {
+              "type": "object",
+              "properties": {
+                "sessionId": { "type": "string", "description": "Session azonosito" },
+                "documentType": { "type": "string", "description": "A hozzaadando dokumentumtipus azonositoja (pl. '25HIPAKM' a kotegelt fedolaphoz). A form_list_document_types adja meg az elerheto tipusokat." }
+              },
+              "required": ["sessionId", "documentType"],
+              "additionalProperties": false
+            }
+            """;
+        return SyncToolSpecification.builder()
+            .tool(ToolHelper.tool("form_add_document",
+                "Hozzaad egy tovabbi dokumentum-peldanyt a nyomtatvanyhoz (pl. kotegelt fedolap 25HIPAKM), ugyanugy mint az ANYK 'uj lap' gombja. Kotegelt nyomtatvanyoknal ez kell a fedolaphoz, es ez inditja be a fo-adatok (adoszam/nev) propagaciojat a fedolap fejleceibe.",
+                schema).build())
+            .callHandler((exchange, request) -> {
+                try {
+                    String sessionId = (String) request.arguments().get("sessionId");
+                    String documentType = (String) request.arguments().get("documentType");
+                    FormSession session = sessionManager.getSession(sessionId);
+                    BookModel bm = (BookModel) session.getBookModel();
+
+                    int newIndex = BookModelAdapter.addDocument(bm, documentType);
+
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("success", true);
+                    result.put("documentType", documentType);
+                    result.put("instanceIndex", newIndex);
+                    result.put("totalInstances", bm.cc.size());
                     return CallToolResult.builder()
                         .content(List.of(new McpSchema.TextContent(gson.toJson(result))))
                         .build();

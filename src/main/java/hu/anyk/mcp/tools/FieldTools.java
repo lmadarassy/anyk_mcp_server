@@ -99,7 +99,7 @@ public class FieldTools {
                     GUI_Datastore ds = BookModelAdapter.getActiveDataStore(bm);
                     if (ds == null) return errorResult("Nincs aktiv adattarolo");
 
-                            ds.set(new Object[]{Integer.valueOf(pageIndex), fieldId}, value);
+                    BookModelAdapter.setFieldWithCalc(bm, ds, pageIndex, fieldId, value);
 
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("success", true);
@@ -160,7 +160,7 @@ public class FieldTools {
                         String value = (String) field.get("value");
                         int pageIndex = getInt(field.get("pageIndex"), 0);
                         try {
-                    ds.set(new Object[]{Integer.valueOf(pageIndex), fieldId}, value);
+                            BookModelAdapter.setFieldWithCalc(bm, ds, pageIndex, fieldId, value);
                             Map<String, Object> ok = new LinkedHashMap<>();
                             ok.put("fid", fieldId);
                             ok.put("value", value);
