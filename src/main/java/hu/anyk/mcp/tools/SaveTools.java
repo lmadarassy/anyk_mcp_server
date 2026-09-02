@@ -87,16 +87,33 @@ public class SaveTools {
                         }
 
                         EnykInnerSaver saver = new EnykInnerSaver(bm, true);
-                        File saved = saver.save(path, -1);  // -1 = teljes konyv
+                        // FONTOS: a silent (z=true) overloadot hasznaljuk, ami Result-ot ad.
+                        // A save(path,-1) overload z=false-szal hiv, ami headless modban
+                        // GUI dialogot (MainFrame.thisinstance=null) probal nyitni es elbukik.
+                        hu.piller.enykp.util.base.Result res = saver.save(path, -1, true);
 
-                        result.put("success", saved != null);
                         result.put("format", "enyk");
-                        if (saved != null) {
+                        if (res != null && res.isOk()) {
+                            File saved = null;
+                            if (res.errorList != null && !res.errorList.isEmpty()
+                                && res.errorList.get(0) instanceof File f) {
+                                saved = f;
+                            }
+                            if (saved == null) saved = new File(path);
+                            result.put("success", true);
                             result.put("path", saved.getAbsolutePath());
                             result.put("fileSize", saved.length());
                         } else {
+                            result.put("success", false);
                             result.put("path", path);
-                            result.put("message", "A mentes sikertelen. Ellenorizze a validacios hibakat form_validate-tel.");
+                            List<String> errs = new ArrayList<>();
+                            if (res != null && res.errorList != null) {
+                                for (Object o : res.errorList) {
+                                    if (!(o instanceof File)) errs.add(String.valueOf(o));
+                                }
+                            }
+                            result.put("errors", errs);
+                            result.put("message", "A belso mentes (EnykInnerSaver) elutasitotta a nyomtatvanyt.");
                         }
                     }
 
