@@ -182,23 +182,52 @@ Ez **nem** párhuzamos implementáció — csak azt az init lépést pótolja, a
 
 4. **Dinamikus oldalak**: alapvetően az első példány (pageIndex=0) kezelt.
 
-## 7. Indítás
+## 7. ÁNYK telepítési könyvtár megadása
+
+Az `abevjava.jar`-t és az `eroforrasok/`-t **nem** a repóból használjuk, hanem egy valós ÁNYK telepítésből. A telepítési könyvtárat (ami tartalmazza az `abevjava.jar`-t és az `eroforrasok/`-t) több módon lehet megadni:
+
+**Build és futtatás közben (Gradle):**
+
+| Mód | Példa |
+|-----|-------|
+| Gradle property (`-P`) | `./gradlew build -PanykHome=/path/to/abevjava` |
+| `ANYK_HOME` env változó | `ANYK_HOME=/path/to/abevjava ./gradlew build` |
+| `gradle.properties` fájl | `anykHome=/path/to/abevjava` (lásd `gradle.properties.example`) |
+
+A feloldási sorrend: `-PanykHome` → `ANYK_HOME` env → `gradle.properties`.
+
+Az `abevjava.jar` `compileOnly` függőség, tehát **nem** kerül bele a build eredménybe — futtatáskor is az ÁNYK telepítésből töltődik.
+
+**Futtatás:**
 
 ```bash
-# ANYK_ROOT = valós ÁNYK telepítés (eroforrasok/-kal!)
-ANYK_ROOT=/path/to/abevjava ./gradlew run
-
-# vagy
-./gradlew run --args="/path/to/abevjava"
+# A gradle run automatikusan classpath-ra teszi az abevjava.jar-t
+# es atadja az anyk.home-ot, ha megadtad build-kor:
+./gradlew run -PanykHome=/path/to/abevjava
 ```
+
+**Önálló jar futtatása** (a szerver a telepítési könyvtárat így oldja fel):
+
+| Mód | Példa |
+|-----|-------|
+| `-Danyk.home` rendszerváltozó | `java -Danyk.home=/path/to/abevjava -cp "...:abevjava.jar" hu.anyk.mcp.AnykMcpServer` |
+| `ANYK_HOME` env változó | `ANYK_HOME=/path/to/abevjava java ...` |
+| `ANYK_ROOT` env változó | (visszafele kompatibilis) |
+| első argumentum | `java ... AnykMcpServer /path/to/abevjava` |
+
+A szerver feloldási sorrendje: `-Danyk.home` → `ANYK_HOME` → `ANYK_ROOT` → első argumentum.
+
+Az `abevjava.jar`-t a futtató classpath-ra kézzel kell tenni (a telepítésből), mivel nincs becsomagolva.
 
 ## 8. Függőségek
 
-| Függőség | Verzió | Cél |
-|----------|--------|-----|
-| `abevjava.jar` | 3.49.0 | ÁNYK osztályok (betöltés, Calculator, validáció, mentés) |
-| `io.modelcontextprotocol.sdk:mcp` | 1.1.4 | MCP szerver (stdio) |
-| `com.google.code.gson:gson` | 2.11.0 | JSON (profil, tool válaszok) |
-| `org.jsoup:jsoup` | 1.18.1 | HTML → text (segédlet) |
-| `org.slf4j:slf4j-simple` | 2.0.16 | Naplózás |
-| Java | 21 | Futtatási környezet |
+| Függőség | Verzió | Cél | Csomagolás |
+|----------|--------|-----|------------|
+| `abevjava.jar` | 3.49.0 | ÁNYK osztályok (betöltés, Calculator, validáció, mentés) | `compileOnly` — ÁNYK telepítésből |
+| `io.modelcontextprotocol.sdk:mcp` | 1.1.4 | MCP szerver (stdio) | becsomagolva |
+| `com.google.code.gson:gson` | 2.11.0 | JSON (profil, tool válaszok) | becsomagolva |
+| `org.jsoup:jsoup` | 1.18.1 | HTML → text (segédlet) | becsomagolva |
+| `org.slf4j:slf4j-simple` | 2.0.16 | Naplózás | becsomagolva |
+| Java | 21 | Futtatási környezet | — |
+
+Az `eroforrasok/*.jar` fájlok (NAVResources stb.) **nem** classpath elemek: az `OrgInfo` futásidőben olvassa őket a `prop.sys.root/eroforrasok/`-ból. Ezért elég, ha az `anyk.home` a helyes telepítésre mutat.

@@ -1,0 +1,5 @@
+# ANYK telepitesi konyvtar (tartalmazza az abevjava.jar-t es az eroforrasok/-t).
+# Masold at gradle.properties nevre, vagy hasznald a -PanykHome=... kapcsolot,
+# vagy az ANYK_HOME kornyezeti valtozot.
+#
+# anykHome=/eleresi/ut/az/abevjava

@@ -19,14 +19,22 @@ public class AnykMcpServer {
     public static void main(String[] args) {
         System.setProperty("java.awt.headless", "true");
 
-        String anykRoot = System.getenv("ANYK_ROOT");
-        if (anykRoot == null || anykRoot.isEmpty()) {
-            if (args.length > 0) {
-                anykRoot = args[0];
-            } else {
-                System.err.println("ANYK_ROOT environment variable or first argument must be set to ANYK installation directory");
-                System.exit(1);
-            }
+        // ANYK telepitesi konyvtar feloldasa - sorrend:
+        // 1. -Danyk.home rendszervaltozo  2. ANYK_HOME env  3. ANYK_ROOT env  4. elso argumentum
+        String anykRoot = firstNonEmpty(
+            System.getProperty("anyk.home"),
+            System.getenv("ANYK_HOME"),
+            System.getenv("ANYK_ROOT"),
+            args.length > 0 ? args[0] : null
+        );
+        if (anykRoot == null) {
+            System.err.println(
+                "Az ANYK telepitesi konyvtar nincs megadva. Add meg az alabbiak egyikevel:\n" +
+                "  -Danyk.home=/eleresi/ut/az/abevjava\n" +
+                "  ANYK_HOME=/eleresi/ut/az/abevjava\n" +
+                "  vagy elso argumentumkent.\n" +
+                "  (A konyvtar tartalmazza az abevjava.jar-t es az eroforrasok/-t.)");
+            System.exit(1);
         }
 
         AnykConfig config = new AnykConfig(anykRoot);
@@ -66,5 +74,12 @@ public class AnykMcpServer {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private static String firstNonEmpty(String... values) {
+        for (String v : values) {
+            if (v != null && !v.isBlank()) return v;
+        }
+        return null;
     }
 }
