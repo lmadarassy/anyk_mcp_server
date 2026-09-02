@@ -251,92 +251,130 @@ public class TaxpayerTools {
             .build();
     }
 
-    private static int applyProfileToForm(GUI_Datastore ds, BookModel bm, Map<String, String> data) {
+    /**
+     * A profil adatait a nyomtatvany mezoibe tolti, PONTOSAN ugy mint az ANYK GUI:
+     * a mezok META-jaban levo "panids" attributum koti a mezot egy torzsadat-
+     * attributumhoz (magyar nevvel). Nincs tippeles - a template mondja meg,
+     * hova propagaljon. (Lasd EntityBookModelConnector.applyOnForm.)
+     *
+     * Vegigmegy minden dokumentum-peldanyon (kotegelt nyomtatvanynal a fedolapon is),
+     * es minden panids-szal rendelkezo mezot kitolt, ha van hozza ertek a profilban.
+     */
+    private static int applyProfileToForm(GUI_Datastore dsIgnored, BookModel bm, Map<String, String> data) {
+        Map<String, String> byPanid = buildPanidMap(data);
         int applied = 0;
-        if (bm.forms == null) return 0;
+        if (bm.cc == null) return 0;
 
-        for (int fi = 0; fi < bm.forms.size(); fi++) {
-            FormModel fm = (FormModel) bm.forms.get(fi);
-            if (fm.fids == null) continue;
+        Object savedActive = bm.cc.getActiveObject();
+        try {
+            for (int i = 0; i < bm.cc.size(); i++) {
+                Object o = bm.cc.get(i);
+                if (!(o instanceof hu.piller.enykp.datastore.Elem elem)) continue;
+                String formId = elem.getType();
 
-            Enumeration<String> keys = fm.fids.keys();
-            while (keys.hasMoreElements()) {
-                String fid = keys.nextElement();
-                DataFieldModel df = (DataFieldModel) fm.fids.get(fid);
-                if (df.readonly) continue;
+                hu.piller.enykp.alogic.metainfo.MetaStore ms =
+                    hu.piller.enykp.alogic.metainfo.MetaInfo.getInstance().getMetaStore(formId);
+                if (ms == null) continue;
 
-                String mask = df.features != null ? (String) df.features.get("mask") : "";
-                if (mask == null) mask = "";
-                String fidU = fid.toUpperCase();
+                java.util.Vector<String> filter = new java.util.Vector<>();
+                filter.add("panids");
+                java.util.Vector<?> metas = ms.getFilteredFieldMetas_And(filter);
+                if (metas == null || metas.isEmpty()) continue;
 
-                String value = matchField(fidU, mask, df.type, data);
-                if (value != null && !value.isEmpty()) {
-                    try {
-                        ds.set(new Object[]{0, fid}, value);
-                        applied++;
-                    } catch (Exception ignored) {}
+                // Erre a peldanyra allitjuk az aktiv datastore-t
+                bm.cc.setActiveObject(elem);
+                GUI_Datastore ds = BookModelAdapter.getActiveDataStore(bm);
+                if (ds == null) continue;
+
+                for (Object mo : metas) {
+                    Hashtable meta = (Hashtable) mo;
+                    String fid = String.valueOf(meta.get("fid"));
+                    String panidsAttr = String.valueOf(meta.get("panids"));
+                    if (fid == null || panidsAttr == null) continue;
+
+                    // panids lehet vesszovel elvalasztott lista
+                    for (String panid : panidsAttr.split(",")) {
+                        panid = panid.trim();
+                        String value = byPanid.get(panid);
+                        if (value == null || value.isEmpty()) continue;
+                        // adoszam/szuletesi idopont: kotojel-mentesites (mint a connector postProcess)
+                        if ("Adózó adószáma".equals(panid)
+                            || "Bizonylat tulajdonos azonosító".equals(panid)
+                            || "Születési időpont".equals(panid)) {
+                            value = value.replace("-", "");
+                        }
+                        try {
+                            BookModelAdapter.setFieldWithCalc(bm, ds, 0, fid, value);
+                            applied++;
+                        } catch (Exception ignored) {}
+                        break; // az elso talalt panid ertek eleg
+                    }
                 }
             }
+        } finally {
+            if (savedActive != null) bm.cc.setActiveObject(savedActive);
         }
         return applied;
     }
 
-    private static String matchField(String fid, String mask, int type, Map<String, String> data) {
-        if (mask.contains("########-#-##") && (fid.contains("B001") || fid.contains("C001")))
-            return data.get("adoszam");
-        if (mask.contains("##########") && (fid.contains("B004") || fid.contains("E001") || fid.contains("C002")))
-            return data.get("adoazonosito");
-        if (mask.contains("##########") && fid.contains("E002"))
-            return data.get("tajSzam");
-        if ((fid.contains("E003") || fid.contains("C008")) && (type == 6 || type == 2) && mask.contains("##"))
-            return data.get("allampolgarsag");
+    /**
+     * A profil mezoit a torzsadat panid-nevekhez rendeli (a mdm_entitydef.xml /
+     * MetaFactory PA_ID_* konstansok nevei alapjan). Osszetett ertekeket is kepez
+     * (nev -> vezeteknev/keresztnev), mint az EntityBookModelConnector.postProcess.
+     */
+    private static Map<String, String> buildPanidMap(Map<String, String> d) {
+        Map<String, String> m = new HashMap<>();
+        put(m, "Adózó neve", d.get("nev"));
+        put(m, "Ügyintéző neve", d.get("nev"));
+        put(m, "Bizonylat tulajdonos név", d.get("nev"));
+        put(m, "Adózó adószáma", d.get("adoszam"));
+        put(m, "Adózó adóazonosító jele", d.get("adoazonosito"));
+        put(m, "Bizonylat tulajdonos azonosító", d.get("adoazonosito"));
+        put(m, "Adóazonosító jel", d.get("adoazonosito"));
+        put(m, "TAJ szám", d.get("tajSzam"));
+        put(m, "Adózó neme", d.get("nem"));
+        put(m, "Állampolgárság", d.get("allampolgarsag"));
+        put(m, "Anyja születési neve", d.get("anyjaNeve"));
+        put(m, "Születési hely", d.get("szuletesiHely"));
+        put(m, "Születési időpont", d.get("szuletesiDatum"));
+        put(m, "Település", d.get("telepules"));
+        put(m, "L Település", d.get("telepules"));
+        put(m, "Közterület neve", d.get("kozteruletNev"));
+        put(m, "L Közterület neve", d.get("kozteruletNev"));
+        put(m, "Közterület jellege", d.get("kozteruletTipus"));
+        put(m, "L Közterület jellege", d.get("kozteruletTipus"));
+        put(m, "Házszám", d.get("hazszam"));
+        put(m, "L Házszám", d.get("hazszam"));
+        put(m, "Emelet", d.get("emelet"));
+        put(m, "Ajtó", d.get("ajto"));
+        put(m, "Irányítószám", d.get("iranyitoszam"));
+        put(m, "L Irányítószám", d.get("iranyitoszam"));
+        put(m, "Ügyintéző telefonszáma", d.get("telefon"));
+        put(m, "Ügyintéző e-mail címe", d.get("email"));
+        put(m, "Számlaszám", d.get("bankszamlaszam"));
 
-        if (fid.contains("E005") || fid.contains("C009"))
-            return data.get("iranyitoszam");
-        if (fid.contains("E006") || fid.contains("C010"))
-            return data.get("telepules");
-        if (fid.contains("E007") || fid.contains("C011") || fid.contains("C012"))
-            return data.get("kozteruletNev");
-        if (fid.contains("E008") || fid.contains("C013"))
-            return data.get("kozteruletTipus");
-        if (fid.contains("E009") || fid.contains("C014") || fid.contains("C015"))
-            return data.get("hazszam");
-        if (fid.contains("E011") && type == 4)
-            return data.get("szuletesiDatum");
+        // Osszetett nev -> vezeteknev/keresztnev (vezeteknev = elso szo, tobbi = keresztnev)
+        String nev = d.get("nev");
+        if (nev != null && nev.contains(" ")) {
+            int sp = nev.indexOf(' ');
+            put(m, "Vezetékneve", nev.substring(0, sp));
+            put(m, "Keresztneve", nev.substring(sp + 1));
+        } else if (nev != null) {
+            put(m, "Vezetékneve", nev);
+        }
+        String sn = d.get("szuletesiNev") != null ? d.get("szuletesiNev") : nev;
+        if (sn != null && sn.contains(" ")) {
+            int sp = sn.indexOf(' ');
+            put(m, "Születési családnév", sn.substring(0, sp));
+            put(m, "Születési utónév", sn.substring(sp + 1));
+        } else if (sn != null) {
+            put(m, "Születési családnév", sn);
+        }
+        return m;
+    }
 
-        if (fid.contains("E019") || fid.contains("C006")) {
-            String nev = data.get("nev");
-            if (nev != null && nev.contains(" ")) return nev.substring(0, nev.indexOf(' '));
-            return nev;
-        }
-        if (fid.contains("E021") || fid.contains("C007")) {
-            String nev = data.get("nev");
-            if (nev != null && nev.contains(" ")) return nev.substring(nev.indexOf(' ') + 1);
-            return null;
-        }
-        if (fid.contains("E022")) {
-            String sn = data.get("szuletesiNev");
-            if (sn == null) sn = data.get("nev");
-            if (sn != null && sn.contains(" ")) return sn.substring(0, sn.indexOf(' '));
-            return sn;
-        }
-        if (fid.contains("E023")) {
-            String sn = data.get("szuletesiNev");
-            if (sn == null) sn = data.get("nev");
-            if (sn != null && sn.contains(" ")) return sn.substring(sn.indexOf(' ') + 1);
-            return null;
-        }
-        if (fid.contains("E024"))
-            return data.get("anyjaNeve");
-        if (fid.contains("E025"))
-            return data.get("szuletesiHely");
-
-        if ((fid.contains("H003") || fid.contains("E005A")) && mask.contains("###"))
-            return data.get("telefon");
-        if (fid.contains("G003") && mask.contains("########-"))
-            return data.get("bankszamlaszam");
-
-        return null;
+    private static void put(Map<String, String> m, String k, String v) {
+        if (v != null && !v.isEmpty()) m.put(k, v);
     }
 
     private static CallToolResult errorResult(String msg) {
