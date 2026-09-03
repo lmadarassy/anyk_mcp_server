@@ -78,6 +78,7 @@ public class FieldTools {
                 "sessionId": { "type": "string", "description": "Session azonosito" },
                 "fieldId": { "type": "string", "description": "Mezo azonosito (fid)" },
                 "value": { "type": "string", "description": "Beallitando ertek" },
+                "documentType": { "type": "string", "description": "Kotegelt nyomtatvanynal a cel dokumentumtipus (pl. '25HIPAKA' vagy '25HIPAKM'). A fid NEM globalisan egyedi - ugyanaz a fid mas mezot jelenthet kulonbozo dokumentumokban! Alapertelmezes: a fo dokumentum." },
                 "pageIndex": { "type": "integer", "description": "Oldal index dinamikus oldalaknal (alapertelmezett: 0)" }
               },
               "required": ["sessionId", "fieldId", "value"],
@@ -86,25 +87,40 @@ public class FieldTools {
             """;
         return SyncToolSpecification.builder()
             .tool(ToolHelper.tool("form_set_field",
-                "Beallitja egy mezo erteket. Visszaadja a szamitott mezok valtozasait is.",
+                "Beallitja egy mezo erteket a cel dokumentumban. Kotegelt nyomtatvanynal a fid nem globalisan egyedi, ezert a documentType-pal lehet a helyes dokumentumot valasztani (mint az ANYK-ban a lap-valaszto). Ha a mezo nem letezik a cel dokumentumban, hibat ad.",
                 schema).build())
             .callHandler((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String fieldId = (String) request.arguments().get("fieldId");
                     String value = (String) request.arguments().get("value");
+                    String documentType = (String) request.arguments().get("documentType");
                     int pageIndex = getInt(request.arguments().get("pageIndex"), 0);
                     FormSession session = sessionManager.getSession(sessionId);
                     BookModel bm = (BookModel) session.getBookModel();
-                    GUI_Datastore ds = BookModelAdapter.getActiveDataStore(bm);
-                    if (ds == null) return errorResult("Nincs aktiv adattarolo");
 
-                    BookModelAdapter.setFieldWithCalc(bm, ds, pageIndex, fieldId, value);
+                    // Cel dokumentum aktivva tetele (mint a GUI lap-valaszto)
+                    if (documentType == null || documentType.isBlank()) {
+                        documentType = bm.main_document_id;
+                    }
+                    int idx = BookModelAdapter.setActiveDocument(bm, documentType);
+                    if (idx < 0) {
+                        return errorResult("Nincs '" + documentType + "' tipusu dokumentum-peldany. "
+                            + "Hasznald a form_list_document_types / form_add_document tool-t.");
+                    }
+
+                    boolean ok = BookModelAdapter.setFieldOnActive(bm, pageIndex, fieldId, value);
+                    if (!ok) {
+                        return errorResult("A(z) '" + fieldId + "' mezo nem letezik a(z) '"
+                            + documentType + "' dokumentumban. Ellenorizd a documentType-ot vagy a fid-et "
+                            + "(a fid nem globalisan egyedi kotegelt nyomtatvanynal).");
+                    }
 
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("success", true);
                     result.put("fid", fieldId);
                     result.put("value", value);
+                    result.put("documentType", documentType);
                     return CallToolResult.builder()
                         .content(List.of(new McpSchema.TextContent(gson.toJson(result))))
                         .build();
@@ -121,6 +137,7 @@ public class FieldTools {
               "type": "object",
               "properties": {
                 "sessionId": { "type": "string", "description": "Session azonosito" },
+                "documentType": { "type": "string", "description": "Alapertelmezett cel dokumentumtipus a mezokhoz (pl. '25HIPAKA'). Mezonkent felulirhato. Alapertelmezes: a fo dokumentum." },
                 "fields": {
                   "type": "array",
                   "items": {
@@ -128,6 +145,7 @@ public class FieldTools {
                     "properties": {
                       "fieldId": { "type": "string" },
                       "value": { "type": "string" },
+                      "documentType": { "type": "string", "description": "Ehhez a mezohoz tartozo dokumentumtipus (felulirja a top-level erteket)." },
                       "pageIndex": { "type": "integer" }
                     },
                     "required": ["fieldId", "value"]
@@ -141,16 +159,20 @@ public class FieldTools {
             """;
         return SyncToolSpecification.builder()
             .tool(ToolHelper.tool("form_set_fields",
-                "Tobb mezo egyszerre torteno beallitasa (batch). Hatekonya sok mezo kitoltesenel.",
+                "Tobb mezo egyszerre torteno beallitasa (batch). Kotegelt nyomtatvanynal a documentType (top-level vagy mezonkent) valasztja a cel dokumentumot - a fid nem globalisan egyedi.",
                 schema).build())
             .callHandler((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
+                    String defaultDocType = (String) request.arguments().get("documentType");
                     List<Map<String, Object>> fields = (List<Map<String, Object>>) request.arguments().get("fields");
                     FormSession session = sessionManager.getSession(sessionId);
                     BookModel bm = (BookModel) session.getBookModel();
-                    GUI_Datastore ds = BookModelAdapter.getActiveDataStore(bm);
-                    if (ds == null) return errorResult("Nincs aktiv adattarolo");
+                    if (bm.cc == null || bm.cc.size() == 0) return errorResult("Nincs aktiv adattarolo");
+
+                    if (defaultDocType == null || defaultDocType.isBlank()) {
+                        defaultDocType = bm.main_document_id;
+                    }
 
                     List<Map<String, Object>> setResults = new ArrayList<>();
                     List<Map<String, Object>> errors = new ArrayList<>();
@@ -159,12 +181,31 @@ public class FieldTools {
                         String fieldId = (String) field.get("fieldId");
                         String value = (String) field.get("value");
                         int pageIndex = getInt(field.get("pageIndex"), 0);
+                        String docType = (String) field.get("documentType");
+                        if (docType == null || docType.isBlank()) docType = defaultDocType;
+
                         try {
-                            BookModelAdapter.setFieldWithCalc(bm, ds, pageIndex, fieldId, value);
-                            Map<String, Object> ok = new LinkedHashMap<>();
-                            ok.put("fid", fieldId);
-                            ok.put("value", value);
-                            setResults.add(ok);
+                            int idx = BookModelAdapter.setActiveDocument(bm, docType);
+                            if (idx < 0) {
+                                Map<String, Object> err = new LinkedHashMap<>();
+                                err.put("fid", fieldId);
+                                err.put("error", "Nincs '" + docType + "' tipusu dokumentum-peldany");
+                                errors.add(err);
+                                continue;
+                            }
+                            boolean ok = BookModelAdapter.setFieldOnActive(bm, pageIndex, fieldId, value);
+                            if (ok) {
+                                Map<String, Object> r = new LinkedHashMap<>();
+                                r.put("fid", fieldId);
+                                r.put("value", value);
+                                r.put("documentType", docType);
+                                setResults.add(r);
+                            } else {
+                                Map<String, Object> err = new LinkedHashMap<>();
+                                err.put("fid", fieldId);
+                                err.put("error", "A mezo nem letezik a(z) '" + docType + "' dokumentumban");
+                                errors.add(err);
+                            }
                         } catch (Exception e) {
                             Map<String, Object> err = new LinkedHashMap<>();
                             err.put("fid", fieldId);
