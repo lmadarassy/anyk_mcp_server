@@ -96,6 +96,7 @@ public class FieldTools {
                     String value = (String) request.arguments().get("value");
                     String documentType = (String) request.arguments().get("documentType");
                     int pageIndex = getInt(request.arguments().get("pageIndex"), 0);
+                    hu.anyk.mcp.McpLog.tool("form_set_field", "doc=" + documentType + " fid=" + fieldId);
                     FormSession session = sessionManager.getSession(sessionId);
                     BookModel bm = (BookModel) session.getBookModel();
 
@@ -166,6 +167,8 @@ public class FieldTools {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String defaultDocType = (String) request.arguments().get("documentType");
                     List<Map<String, Object>> fields = (List<Map<String, Object>>) request.arguments().get("fields");
+                    hu.anyk.mcp.McpLog.tool("form_set_fields", "doc=" + defaultDocType
+                        + " count=" + (fields == null ? 0 : fields.size()));
                     FormSession session = sessionManager.getSession(sessionId);
                     BookModel bm = (BookModel) session.getBookModel();
                     if (bm.cc == null || bm.cc.size() == 0) return errorResult("Nincs aktiv adattarolo");

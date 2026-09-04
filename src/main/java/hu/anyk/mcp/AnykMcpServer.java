@@ -53,6 +53,8 @@ public class AnykMcpServer {
             System.exit(1);
         }
 
+        McpLog.init();
+
         AnykConfig config = new AnykConfig(anykRoot);
         config.initialize();
 

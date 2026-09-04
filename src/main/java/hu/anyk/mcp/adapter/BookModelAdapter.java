@@ -160,9 +160,11 @@ public class BookModelAdapter {
             if (o instanceof Elem e && e.getType().equals(formTypeId)) {
                 bm.cc.setActiveObject(e);
                 bm.setCalcelemindex(i);
+                hu.anyk.mcp.McpLog.note("setActiveDocument(" + formTypeId + ") -> idx=" + i);
                 return i;
             }
         }
+        hu.anyk.mcp.McpLog.note("setActiveDocument(" + formTypeId + ") -> NEM TALALT peldany");
         return -1;
     }
 
@@ -197,6 +199,7 @@ public class BookModelAdapter {
         FormModel fm = bm.get(formId);
         if (fm == null || fm.fids == null || fm.fids.get(fieldId) == null) {
             // A mezo nem tartozik az aktiv peldany form-jahoz -> nem irunk arva kodot
+            hu.anyk.mcp.McpLog.set("setFieldOnActive", formId, idx, fieldId, value, false);
             return false;
         }
 
@@ -218,6 +221,12 @@ public class BookModelAdapter {
         } catch (Exception ignored) {
         } finally {
             ds.inkihatas = false;
+        }
+        // Diagnosztika: a calc UTAN visszaolvassuk - ha nem egyezik, a kalkulacio felulirta/torolte
+        String after = ds.get(new Object[]{Integer.valueOf(pageIndex), fieldId});
+        hu.anyk.mcp.McpLog.set("setFieldOnActive", formId, idx, fieldId, value, true);
+        if (after == null ? value != null : !after.equals(value)) {
+            hu.anyk.mcp.McpLog.note("WARN calc utan az ertek megvaltozott: '" + value + "' -> '" + after + "'");
         }
         return true;
     }

@@ -226,6 +226,7 @@ public class TaxpayerTools {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String taxpayerId = (String) request.arguments().get("taxpayerId");
+                    hu.anyk.mcp.McpLog.tool("taxpayer_apply_to_form", "taxpayerId=" + taxpayerId);
 
                     TaxpayerProfile p = store.getProfile(taxpayerId);
                     if (p == null) p = store.findByName(taxpayerId);
@@ -238,6 +239,7 @@ public class TaxpayerTools {
 
                     Map<String, String> profileData = p.toFieldMap();
                     int applied = applyProfileToForm(ds, bm, profileData);
+                    hu.anyk.mcp.McpLog.note("taxpayer_apply_to_form appliedFields=" + applied);
 
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("success", true);

@@ -47,8 +47,26 @@ public class SaveTools {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String outputPath = (String) request.arguments().get("outputPath");
                     String format = (String) request.arguments().getOrDefault("format", "enyk");
+                    hu.anyk.mcp.McpLog.tool("form_save", "format=" + format + " path=" + outputPath);
                     FormSession session = sessionManager.getSession(sessionId);
                     BookModel bm = (BookModel) session.getBookModel();
+
+                    // Diagnosztika: mentes elott hany mezo van kitoltve peldanyonkent
+                    if (bm.cc != null) {
+                        for (int i = 0; i < bm.cc.size(); i++) {
+                            Object o = bm.cc.get(i);
+                            if (o instanceof hu.piller.enykp.datastore.Elem elem) {
+                                int cnt = 0;
+                                var it = ((hu.piller.enykp.interfaces.IDataStore) elem.getRef()).getCaseIdIterator();
+                                while (it.hasNext()) {
+                                    Object si = it.next();
+                                    if (si instanceof hu.piller.enykp.datastore.StoreItem s
+                                        && s.value != null && !"".equals(s.value) && s.index >= 0) cnt++;
+                                }
+                                hu.anyk.mcp.McpLog.note("save: peldany[" + i + "] " + elem.getType() + " kitoltott mezok=" + cnt);
+                            }
+                        }
+                    }
 
                     Map<String, Object> result = new LinkedHashMap<>();
 

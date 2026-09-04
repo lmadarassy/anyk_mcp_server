@@ -260,10 +260,12 @@ public class FormTools {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String documentType = (String) request.arguments().get("documentType");
+                    hu.anyk.mcp.McpLog.tool("form_add_document", "documentType=" + documentType);
                     FormSession session = sessionManager.getSession(sessionId);
                     BookModel bm = (BookModel) session.getBookModel();
 
                     int newIndex = BookModelAdapter.addDocument(bm, documentType);
+                    hu.anyk.mcp.McpLog.note("form_add_document -> instanceIndex=" + newIndex + " totalInstances=" + bm.cc.size());
 
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("success", true);
