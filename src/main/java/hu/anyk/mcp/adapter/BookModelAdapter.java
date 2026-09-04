@@ -2,10 +2,19 @@ package hu.anyk.mcp.adapter;
 
 import hu.piller.enykp.gui.model.BookModel;
 import hu.piller.enykp.gui.model.FormModel;
+import hu.piller.enykp.gui.model.DataFieldModel;
 import hu.piller.enykp.datastore.GUI_Datastore;
 import hu.piller.enykp.datastore.Elem;
+import hu.piller.enykp.alogic.metainfo.MetaInfo;
+import hu.piller.enykp.alogic.metainfo.MetaStore;
+import hu.piller.enykp.alogic.calculator.CalculatorManager;
+import hu.piller.enykp.alogic.calculator.lookup.LookupListHandler;
+import hu.piller.enykp.alogic.templateutils.FieldsGroups;
 
 import java.io.File;
+import java.util.List;
+import java.util.Map;
+import java.util.ArrayList;
 
 /**
  * Az eredeti abevjava.jar BookModel osztalyt hasznalja.
@@ -204,10 +213,29 @@ public class BookModelAdapter {
         }
 
         GUI_Datastore ds = (GUI_Datastore) elem.getRef();
-        ds.set(new Object[]{Integer.valueOf(pageIndex), fieldId}, value);
-
-        var cm = hu.piller.enykp.alogic.calculator.CalculatorManager.getInstance();
+        var cm = CalculatorManager.getInstance();
         String key = pageIndex + "_" + fieldId;
+
+        // Matrix/lookup-kotott mezo (pl. onkormanyzat neve): a beirt szoveget fel kell
+        // oldani a pontos hivatalos listaelemre, kulonben a mezo ervenytelen marad es a
+        // csoport-fuggo oszlopok sem toltodnek ki - pontosan ugy, mint az ANYK GUI comboja.
+        MatrixResolution mr = resolveMatrixValue(formId, fieldId, pageIndex, value);
+        if (mr != null) {
+            ds.set(new Object[]{Integer.valueOf(pageIndex), fieldId}, mr.canonical);
+            DataFieldModel dfm = (DataFieldModel) fm.fids.get(fieldId);
+            try {
+                cm.FillGroupFields(formId, ds, dfm, mr.recordIndex, pageIndex);
+            } catch (Exception ignored) {
+            }
+            if (!mr.canonical.equals(value)) {
+                hu.anyk.mcp.McpLog.note("matrix feloldas '" + value + "' -> '" + mr.canonical
+                    + "' (idx=" + mr.recordIndex + ")");
+            }
+            hu.anyk.mcp.McpLog.set("setFieldOnActive", formId, idx, fieldId, mr.canonical, true);
+            return true;
+        }
+
+        ds.set(new Object[]{Integer.valueOf(pageIndex), fieldId}, value);
         try {
             ds.inkihatas = true;
             cm.calc_field(formId, fieldId, pageIndex, key);
@@ -229,5 +257,102 @@ public class BookModelAdapter {
             hu.anyk.mcp.McpLog.note("WARN calc utan az ertek megvaltozott: '" + value + "' -> '" + after + "'");
         }
         return true;
+    }
+
+    /** Egy matrix/lookup mezo feloldott erteke + a matrix sor indexe. */
+    private static final class MatrixResolution {
+        final String canonical;
+        final int recordIndex;
+        MatrixResolution(String canonical, int recordIndex) {
+            this.canonical = canonical;
+            this.recordIndex = recordIndex;
+        }
+    }
+
+    /**
+     * Ha a mezo matrix/lookup-kotott (field_group_id + matrix_id a META-ban, pl. az
+     * onkormanyzat neve mezo a 25HIPAKM lapon), feloldja a felhasznalo altal beirt
+     * szoveget a pontos hivatalos listaelemre - ugy, mint az ANYK GUI comboja.
+     * A matrix nevei kotott formaban vannak (pl. "ERD MEGYEI JOGU VAROS ONKORMANYZATA"),
+     * ezert a szabad szoveges "Erd" nem egyezne, es a mezo ervenytelen maradna.
+     *
+     * Egyezteto strategia (kis/nagybetu-fuggetlen, trimmelt): 1) pontos, 2) prefix,
+     * 3) tartalmaz. Ha egyetlen talalat van, azt hasznalja. Ha nincs talalat vagy
+     * tobbertelmu, IllegalArgumentException-t dob a jelolt-listaval, hogy a hivo AI
+     * a helyeset valaszthassa.
+     *
+     * @return a feloldott ertek + sorindex; vagy null ha a mezo NEM matrix-kotott
+     *         (ilyenkor a hivo a szokasos uton allitja be)
+     */
+    private static MatrixResolution resolveMatrixValue(String formId, String fieldId,
+                                                        int pageIndex, String value) {
+        MetaStore ms = MetaInfo.getInstance().getMetaStore(formId);
+        if (ms == null) return null;
+        Map meta = ms.getFieldMetas(fieldId);
+        if (meta == null) return null;
+        Object groupId = meta.get(FieldsGroups.META_GROUP_ID);
+        Object matrixId = meta.get(FieldsGroups.META_MATRIX_ID);
+        if (groupId == null || String.valueOf(groupId).isEmpty()
+            || matrixId == null || String.valueOf(matrixId).isEmpty()) {
+            return null; // nem matrix-kotott mezo
+        }
+        Object colObj = meta.get(FieldsGroups.META_MATRIX_FIELD_COL);
+        String col = colObj == null ? "1" : String.valueOf(colObj);
+
+        List<String> names;
+        try {
+            names = LookupListHandler.getInstance()
+                .getLookupListProvider(formId, fieldId)
+                .getTableView(pageIndex, col);
+        } catch (Exception e) {
+            return null; // ha nem tudjuk lekerni a listat, hagyjuk a szokasos utat
+        }
+        if (names == null || names.isEmpty()) return null;
+
+        String needle = value == null ? "" : value.trim();
+        String needleLc = needle.toLowerCase();
+
+        // 1) pontos (case-insensitive)
+        int exact = -1;
+        for (int i = 0; i < names.size(); i++) {
+            if (names.get(i) != null && names.get(i).trim().equalsIgnoreCase(needle)) { exact = i; break; }
+        }
+        if (exact >= 0) return new MatrixResolution(names.get(exact), exact);
+
+        // 2) prefix
+        List<Integer> prefixHits = new ArrayList<>();
+        for (int i = 0; i < names.size(); i++) {
+            String n = names.get(i);
+            if (n != null && n.trim().toLowerCase().startsWith(needleLc)) prefixHits.add(i);
+        }
+        if (prefixHits.size() == 1) {
+            int i = prefixHits.get(0);
+            return new MatrixResolution(names.get(i), i);
+        }
+
+        // 3) tartalmaz
+        List<Integer> containsHits = new ArrayList<>();
+        if (prefixHits.isEmpty()) {
+            for (int i = 0; i < names.size(); i++) {
+                String n = names.get(i);
+                if (n != null && n.toLowerCase().contains(needleLc)) containsHits.add(i);
+            }
+        }
+        List<Integer> hits = !prefixHits.isEmpty() ? prefixHits : containsHits;
+
+        if (hits.isEmpty()) {
+            throw new IllegalArgumentException("A(z) '" + value + "' ertek nem talalhato a(z) '"
+                + matrixId + "' listaban (" + names.size() + " elem). Add meg a pontos listaelemet.");
+        }
+        // tobbertelmu -> jeloltek visszaadasa (max 15)
+        StringBuilder sb = new StringBuilder();
+        sb.append("A(z) '").append(value).append("' tobb listaelemre is illik (")
+          .append(hits.size()).append("). Valaszd a pontosat: ");
+        for (int j = 0; j < hits.size() && j < 15; j++) {
+            if (j > 0) sb.append(" | ");
+            sb.append('\'').append(names.get(hits.get(j))).append('\'');
+        }
+        if (hits.size() > 15) sb.append(" | ...");
+        throw new IllegalArgumentException(sb.toString());
     }
 }
