@@ -47,7 +47,7 @@ public class HelpTools {
             .tool(ToolHelper.tool("help_get_guide",
                 "Visszaadja a nyomtatvany kitoltesi utmutatojat (segedletet) szoveges formatumban. Az LLM ebbol erti meg, melyik mezot hogyan kell kitolteni.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String page = (String) request.arguments().get("page");
@@ -91,7 +91,7 @@ public class HelpTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -110,7 +110,7 @@ public class HelpTools {
             .tool(ToolHelper.tool("help_list_pages",
                 "Listazza a segedlet osszes oldal-hivatkozasat (tartalomjegyzek).",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     FormSession session = sessionManager.getSession(sessionId);
@@ -146,7 +146,7 @@ public class HelpTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -166,7 +166,7 @@ public class HelpTools {
             .tool(ToolHelper.tool("help_search",
                 "Keres a kitoltesi utmutatoban egy adott kifejezes utan.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String query = (String) request.arguments().get("query");
@@ -212,7 +212,7 @@ public class HelpTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 

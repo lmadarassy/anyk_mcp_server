@@ -48,7 +48,7 @@ public class FormTools {
             .tool(ToolHelper.tool("form_open",
                 "Megnyit egy nyomtatvany sablont es letrehoz egy ures peldanyt kitoltesre. Visszaadja a sessionId-t.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String templatePath = (String) request.arguments().get("templatePath");
                     File templateFile = new File(templatePath);
@@ -118,7 +118,7 @@ public class FormTools {
                 } catch (Exception e) {
                     return errorResult("Hiba a nyomtatvany megnyitasakor: " + e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -137,7 +137,7 @@ public class FormTools {
             .tool(ToolHelper.tool("form_close",
                 "Bezar egy megnyitott nyomtatvany session-t.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     FormSession session = sessionManager.getSession(sessionId);
@@ -150,7 +150,7 @@ public class FormTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -172,7 +172,7 @@ public class FormTools {
             .tool(ToolHelper.tool("form_get_structure",
                 "Visszaadja a nyomtatvany strukturajat: urlapok, oldalak, mezok (tipus, cimke, szabalyok, aktualis ertek).",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String formTypeId = (String) request.arguments().get("formTypeId");
@@ -187,7 +187,7 @@ public class FormTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -206,7 +206,7 @@ public class FormTools {
             .tool(ToolHelper.tool("form_list_document_types",
                 "Listazza a nyomtatvanyban elerheto dokumentumtipusokat (fo dokumentum + tovabbi lapok, pl. kotegelt fedolap). Megmutatja melyik a fo (isMain) es melyikbol hozhato letre tobb (maxCreation).",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     FormSession session = sessionManager.getSession(sessionId);
@@ -236,7 +236,7 @@ public class FormTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -256,7 +256,7 @@ public class FormTools {
             .tool(ToolHelper.tool("form_add_document",
                 "Hozzaad egy tovabbi dokumentum-peldanyt a nyomtatvanyhoz (pl. kotegelt fedolap 25HIPAKM), ugyanugy mint az ANYK 'uj lap' gombja. Kotegelt nyomtatvanyoknal ez kell a fedolaphoz, es ez inditja be a fo-adatok (adoszam/nev) propagaciojat a fedolap fejleceibe.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String documentType = (String) request.arguments().get("documentType");
@@ -278,7 +278,7 @@ public class FormTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 

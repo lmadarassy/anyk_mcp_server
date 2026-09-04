@@ -66,7 +66,7 @@ public class TaxpayerTools {
             .tool(ToolHelper.tool("taxpayer_save",
                 "Ment vagy frissit egy adozoi profilt. A profil tartalmazhatja a nevet, adoazonositot, cimet, es minden mas alapadatot, ami a bevallasokhoz szukseges.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     Map<String, Object> args = request.arguments();
                     var builder = TaxpayerProfile.builder()
@@ -105,7 +105,7 @@ public class TaxpayerTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -121,7 +121,7 @@ public class TaxpayerTools {
             .tool(ToolHelper.tool("taxpayer_list",
                 "Listazza az osszes mentett adozoi profilt.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     List<TaxpayerProfile> profiles = store.listProfiles();
                     List<Map<String, Object>> results = new ArrayList<>();
@@ -140,7 +140,7 @@ public class TaxpayerTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -159,7 +159,7 @@ public class TaxpayerTools {
             .tool(ToolHelper.tool("taxpayer_get",
                 "Lekerdez egy adozoi profilt ID, nev vagy adoazonosito alapjan.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String query = (String) request.arguments().get("query");
                     TaxpayerProfile p = store.getProfile(query);
@@ -171,7 +171,7 @@ public class TaxpayerTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -190,7 +190,7 @@ public class TaxpayerTools {
             .tool(ToolHelper.tool("taxpayer_delete",
                 "Torol egy adozoi profilt.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String id = (String) request.arguments().get("id");
                     store.deleteProfile(id);
@@ -200,7 +200,7 @@ public class TaxpayerTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -222,7 +222,7 @@ public class TaxpayerTools {
                 + "FONTOS a helyes sorrend kotegelt nyomtatvanynal: eloszor add hozza az osszes tovabbi dokumentumot (form_add_document), es CSAK UTANA hivd ezt - igy a fedolapokra (pl. 25HIPAKM) is atkerul az azonosito adat. "
                 + "A profil-specifikus mezoket (bevallasi idoszak, onkormanyzat, nyilatkozatok, osszegek) ezutan a form_set_field / form_set_fields tool-lal add meg, a documentType parameterrel.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String taxpayerId = (String) request.arguments().get("taxpayerId");
@@ -251,7 +251,7 @@ public class TaxpayerTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 

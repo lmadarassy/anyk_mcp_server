@@ -40,7 +40,7 @@ public class TemplateTools {
             .tool(ToolHelper.tool("template_list_installed",
                 "Listazza a telepitett nyomtatvany sablonokat.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     List<Map<String, Object>> results = listTemplates(config);
                     return CallToolResult.builder()
@@ -49,7 +49,7 @@ public class TemplateTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -71,7 +71,7 @@ public class TemplateTools {
             .tool(ToolHelper.tool("template_search",
                 "Keres egy nyomtatvanyt nev vagy azonosito alapjan a telepitett sablonok kozott.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String query = (String) request.arguments().get("query");
                     List<Map<String, Object>> all = listTemplates(config);
@@ -94,7 +94,7 @@ public class TemplateTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -115,7 +115,7 @@ public class TemplateTools {
             .tool(ToolHelper.tool("template_list_available",
                 "Lekerdezi a NAV szerverrol az osszes letoltheto nyomtatvanyt es segedletet. Opcionalis szurovel szukitheto.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String query = (String) request.arguments().get("query");
                     List<ComponentInfo> all = DownloadAdapter.fetchAvailableComponents();
@@ -148,7 +148,7 @@ public class TemplateTools {
                 } catch (Exception e) {
                     return errorResult("NAV szerver lekerdezesi hiba: " + e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -174,7 +174,7 @@ public class TemplateTools {
             .tool(ToolHelper.tool("template_download",
                 "Letolt egy nyomtatvany sablont (es opcionálisan a segedletet) a NAV szerverrol es telepiti.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String formId = (String) request.arguments().get("formId");
                     Boolean includeHelp = (Boolean) request.arguments().get("includeHelp");
@@ -231,7 +231,7 @@ public class TemplateTools {
                 } catch (Exception e) {
                     return errorResult("Letoltesi hiba: " + e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 

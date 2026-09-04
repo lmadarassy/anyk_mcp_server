@@ -41,7 +41,7 @@ public class FormAnalyzerTool {
             .tool(ToolHelper.tool("form_analyze_requirements",
                 "Elemzi a nyomtatvanyt es a segedletet, es osszefoglalja milyen informaciokra lesz szukseg a kitolteshez. Kategorizalja a mezoket (azonositas, cim, jovedelem, stb.) es megmondja mit kell kerdezni a felhasznalotol.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     FormSession session = sessionManager.getSession(sessionId);
@@ -57,7 +57,7 @@ public class FormAnalyzerTool {
                         .isError(true)
                         .build();
                 }
-            })
+            }))
             .build();
     }
 

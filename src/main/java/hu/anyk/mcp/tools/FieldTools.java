@@ -46,7 +46,7 @@ public class FieldTools {
             .tool(ToolHelper.tool("form_get_field",
                 "Lekerdezi egy mezo aktualis erteket.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String fieldId = (String) request.arguments().get("fieldId");
@@ -66,7 +66,7 @@ public class FieldTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -89,7 +89,7 @@ public class FieldTools {
             .tool(ToolHelper.tool("form_set_field",
                 "Beallitja egy mezo erteket a cel dokumentumban. Kotegelt nyomtatvanynal a fid nem globalisan egyedi, ezert a documentType-pal lehet a helyes dokumentumot valasztani (mint az ANYK-ban a lap-valaszto). Ha a mezo nem letezik a cel dokumentumban, hibat ad.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String fieldId = (String) request.arguments().get("fieldId");
@@ -128,7 +128,7 @@ public class FieldTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -162,7 +162,7 @@ public class FieldTools {
             .tool(ToolHelper.tool("form_set_fields",
                 "Tobb mezo egyszerre torteno beallitasa (batch). Kotegelt nyomtatvanynal a documentType (top-level vagy mezonkent) valasztja a cel dokumentumot - a fid nem globalisan egyedi.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String defaultDocType = (String) request.arguments().get("documentType");
@@ -227,7 +227,7 @@ public class FieldTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -248,7 +248,7 @@ public class FieldTools {
             .tool(ToolHelper.tool("form_get_all_fields",
                 "Az osszes mezo aktualis erteket adja vissza (opcionalisan szurheto urlap/oldal szerint).",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String formTypeId = (String) request.arguments().get("formTypeId");
@@ -289,7 +289,7 @@ public class FieldTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 

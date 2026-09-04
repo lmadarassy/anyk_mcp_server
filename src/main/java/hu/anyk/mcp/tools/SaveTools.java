@@ -42,7 +42,7 @@ public class SaveTools {
             .tool(ToolHelper.tool("form_save",
                 "Menti a kitoltott nyomtatvanyt az eredeti ANYK mentovel. Alapertelmezetten a belso .frm.enyk formatumot hasznalja (EnykInnerSaver), amit az ANYK vissza tud tolteni. A format=xml a .xml export formatumot adja (EnykXmlSaver).",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String outputPath = (String) request.arguments().get("outputPath");
@@ -141,7 +141,7 @@ public class SaveTools {
                 } catch (Exception e) {
                     return errorResult("Mentesi hiba: " + e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 

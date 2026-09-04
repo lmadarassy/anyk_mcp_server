@@ -41,7 +41,7 @@ public class ValidationTools {
             .tool(ToolHelper.tool("form_validate",
                 "Teljes validaciot futtat a nyomtatvanyon. Visszaadja a hibakat es figyelmeztetesekat.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     FormSession session = sessionManager.getSession(sessionId);
@@ -80,7 +80,7 @@ public class ValidationTools {
                 } catch (Exception e) {
                     return errorResult("Validacios hiba: " + e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
@@ -102,7 +102,7 @@ public class ValidationTools {
             .tool(ToolHelper.tool("form_validate_field",
                 "Egyetlen mezo validacioja.",
                 schema).build())
-            .callHandler((exchange, request) -> {
+            .callHandler(ToolHelper.locked((exchange, request) -> {
                 try {
                     String sessionId = (String) request.arguments().get("sessionId");
                     String fieldId = (String) request.arguments().get("fieldId");
@@ -137,7 +137,7 @@ public class ValidationTools {
                 } catch (Exception e) {
                     return errorResult(e.getMessage());
                 }
-            })
+            }))
             .build();
     }
 
