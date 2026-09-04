@@ -330,10 +330,13 @@ public class TaxpayerTools {
         Map<String, String> m = new HashMap<>();
         put(m, "Adózó neve", d.get("nev"));
         put(m, "Ügyintéző neve", d.get("nev"));
-        put(m, "Bizonylat tulajdonos név", d.get("nev"));
+        // FONTOS: "Bizonylat tulajdonos nev/azonosito" NEM valos torzsadat-attributum
+        // (nincs a mdm_entitydef.xml-ben). Az ANYK EntityBookModelConnector sem tolti.
+        // A 25HIPAKM lapon a 0A0001C001A ('onkormanyzat_neve', matrix-valaszto) ezt a
+        // panids-t hasznalja - ha ide irnank, a nev tevesen az onkormanyzat-mezobe kerulne.
+        // Ezert ezt a ket mappinget SZANDEKOSAN nem toltjuk.
         put(m, "Adózó adószáma", d.get("adoszam"));
         put(m, "Adózó adóazonosító jele", d.get("adoazonosito"));
-        put(m, "Bizonylat tulajdonos azonosító", d.get("adoazonosito"));
         put(m, "Adóazonosító jel", d.get("adoazonosito"));
         put(m, "TAJ szám", d.get("tajSzam"));
         put(m, "Adózó neme", d.get("nem"));
