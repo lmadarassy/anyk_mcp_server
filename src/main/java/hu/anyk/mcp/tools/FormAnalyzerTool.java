@@ -89,11 +89,12 @@ public class FormAnalyzerTool {
                 FormModel fm = (FormModel) bm.forms.get(fi);
                 if (fm.pages == null) continue;
 
+                hu.piller.enykp.alogic.metainfo.MetaStore ms =
+                    hu.piller.enykp.alogic.metainfo.MetaInfo.getInstance().getMetaStore(fm.id);
+
                 for (int pi = 0; pi < fm.pages.size(); pi++) {
                     PageModel pm = (PageModel) fm.pages.get(pi);
                     if (pm.y_sorted_df == null) continue;
-
-                    Map<String, String> labelMap = StructureMapper.buildLabelMap(pm, fm);
 
                     for (int di = 0; di < pm.y_sorted_df.size(); di++) {
                         DataFieldModel df = (DataFieldModel) pm.y_sorted_df.get(di);
@@ -102,8 +103,21 @@ public class FormAnalyzerTool {
 
                         String mask = df.features != null ? (String) df.features.get("mask") : "";
                         if (mask == null) mask = "";
-                        String label = labelMap.getOrDefault(df.key, "");
-                        String category = categorizeField(df.key, mask, df.type, label);
+                        // A template META-jabol: vid (mezonev) es panids (torzsadat-jelentes)
+                        String label = "";
+                        String panids = null;
+                        if (ms != null) {
+                            try {
+                                Map<?, ?> metas = ms.getFieldMetas(df.key);
+                                if (metas != null) {
+                                    Object v = metas.get("vid");
+                                    if (v != null) label = v.toString();
+                                    Object p = metas.get("panids");
+                                    if (p != null) panids = p.toString();
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                        String category = categorizeField(df.key, mask, df.type, label, panids);
 
                         if ("azonositas".equals(category) || "szemelyi_adatok".equals(category)
                             || "lakcim".equals(category) || "bankszamla".equals(category)) {
@@ -162,38 +176,37 @@ public class FormAnalyzerTool {
         return result;
     }
 
-    private static String categorizeField(String fid, String mask, int type, String label) {
+    private static String categorizeField(String fid, String mask, int type, String label, String panids) {
+        // 1. Elsodlegesen a template META panids-e (torzsadat-jelentes) alapjan -
+        //    ez pontos, nem heurisztika. A panids nevek a mdm_entitydef.xml-bol jonnek.
+        if (panids != null && !panids.isEmpty()) {
+            String p = panids.toLowerCase();
+            if (p.contains("adószám") || p.contains("adóazonosító") || p.contains("taj")
+                || p.contains("bizonylat tulajdonos azonosító"))
+                return "azonositas";
+            if (p.contains("neve") || p.contains("vezetéknev") || p.contains("keresztnev")
+                || p.contains("anyja") || p.contains("születési") || p.contains("neme")
+                || p.contains("állampolgár") || p.contains("titulus"))
+                return "szemelyi_adatok";
+            if (p.contains("település") || p.contains("közterület") || p.contains("házszám")
+                || p.contains("irányítószám") || p.contains("emelet") || p.contains("ajtó")
+                || p.contains("lépcsőház") || p.contains("épület"))
+                return "lakcim";
+            if (p.contains("bevallási időszak"))
+                return "bevallasi_idoszak";
+            if (p.contains("számla"))
+                return "bankszamla";
+            if (p.contains("telefon") || p.contains("e-mail") || p.contains("ügyintéző"))
+                return "kapcsolattarto";
+        }
+
+        // 2. Fallback: a korabbi mask/fid + label heurisztika (panids nelkuli mezokre)
         String fidU = fid.toUpperCase();
-        String labelL = label.toLowerCase();
+        String labelL = label == null ? "" : label.toLowerCase();
 
         if (mask.contains("########-#-##") || (mask.contains("##########") && (fidU.contains("B001") || fidU.contains("B004") || fidU.contains("C001") || fidU.contains("C002"))))
             return "azonositas";
-        if (fidU.contains("E001") && mask.contains("##########")) return "azonositas";
-        if (fidU.contains("E002") && mask.contains("##########")) return "azonositas";
         if (mask.contains("NEBIH") || mask.contains("OCSG")) return "azonositas";
-
-        if (fidU.contains("E019") || fidU.contains("E020") || fidU.contains("E021") ||
-            fidU.contains("E022") || fidU.contains("E023") || fidU.contains("E024") || fidU.contains("E025") ||
-            fidU.contains("C006") || fidU.contains("C007"))
-            return "szemelyi_adatok";
-        if (fidU.contains("E003") && (type == 6 || type == 2)) return "szemelyi_adatok";
-        if (fidU.contains("E011") && type == 4) return "szemelyi_adatok";
-
-        if (fidU.contains("E005") || fidU.contains("E006") || fidU.contains("E007") ||
-            fidU.contains("E008") || fidU.contains("E009") || fidU.contains("E010") ||
-            fidU.contains("C009") || fidU.contains("C010") || fidU.contains("C011") ||
-            fidU.contains("C012") || fidU.contains("C013") || fidU.contains("C014") || fidU.contains("C015"))
-            return "lakcim";
-
-        if (fidU.contains("D001") || fidU.contains("D002") || fidU.contains("D003") ||
-            fidU.contains("D004") || fidU.contains("D005") || fidU.contains("D006") ||
-            fidU.contains("F026"))
-            return "bevallasi_idoszak";
-
-        if (fidU.contains("G003") || fidU.contains("G004") || fidU.contains("G005") ||
-            fidU.contains("G006") || fidU.contains("G007") || fidU.contains("G008") ||
-            fidU.contains("G009") || fidU.contains("G010"))
-            return "bankszamla";
 
         if (type == 1) return "nyilatkozatok";
 

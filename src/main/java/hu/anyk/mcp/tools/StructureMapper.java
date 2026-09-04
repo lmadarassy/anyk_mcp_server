@@ -4,7 +4,6 @@ import hu.piller.enykp.gui.model.*;
 import hu.piller.enykp.datastore.GUI_Datastore;
 import hu.anyk.mcp.adapter.BookModelAdapter;
 
-import java.awt.Rectangle;
 import java.util.*;
 
 @SuppressWarnings("unchecked")
@@ -48,17 +47,17 @@ public class StructureMapper {
 
                     List<Map<String, Object>> fieldsList = new ArrayList<>();
                     if (pm.y_sorted_df != null) {
-                        Map<String, String> labelMap = buildLabelMap(pm, fm);
                         GUI_Datastore ds = BookModelAdapter.getActiveDataStore(bm);
                         // A template META-ja tartalmazza a mezonevet (vid), a torzsadat-
-                        // jelentest (panids) es a kotelezoseget (req). Ez megbizhatobb, mint
-                        // a geometriai cimke-illesztes.
+                        // jelentest (panids) es a kotelezoseget (req) - a mezok 100%-ara.
+                        // Ez megbizhatobb, mint a geometriai cimke-illesztes (ami sok
+                        // formnal ures cimket adott), ezert azt teljesen elhagytuk.
                         hu.piller.enykp.alogic.metainfo.MetaStore ms =
                             hu.piller.enykp.alogic.metainfo.MetaInfo.getInstance().getMetaStore(fm.id);
 
                         for (int di = 0; di < pm.y_sorted_df.size(); di++) {
                             DataFieldModel df = (DataFieldModel) pm.y_sorted_df.get(di);
-                            Map<String, Object> fieldMap = mapField(df, fm, ds, labelMap, ms);
+                            Map<String, Object> fieldMap = mapField(df, fm, ds, ms);
                             fieldsList.add(fieldMap);
                         }
                     }
@@ -74,18 +73,14 @@ public class StructureMapper {
         return result;
     }
 
-    public static Map<String, Object> mapField(DataFieldModel df, FormModel fm, GUI_Datastore ds, Map<String, String> labelMap) {
-        return mapField(df, fm, ds, labelMap, null);
-    }
-
     public static Map<String, Object> mapField(DataFieldModel df, FormModel fm, GUI_Datastore ds,
-                                               Map<String, String> labelMap,
                                                hu.piller.enykp.alogic.metainfo.MetaStore ms) {
         Map<String, Object> fieldMap = new LinkedHashMap<>();
         fieldMap.put("fid", df.key);
         fieldMap.put("type", df.type >= 0 && df.type < TYPE_NAMES.length ? TYPE_NAMES[df.type] : "unknown");
 
-        // A template META-jabol vett attributumok (megbizhatobb, mint a geometriai cimke)
+        // A template META-jabol vett attributumok (a mezok 100%-ara elerheto, es
+        // megbizhatobb mint a geometriai cimke-illesztes, amit ezert elhagytunk).
         String vid = null, panids = null, help = null;
         boolean required = false;
         if (ms != null) {
@@ -105,10 +100,8 @@ public class StructureMapper {
             } catch (Exception ignored) {}
         }
 
-        // label: eloszor a geometriai cimke, ha ures akkor a vid (belso mezonev)
-        String geoLabel = labelMap != null ? labelMap.getOrDefault(df.key, "") : "";
-        String label = (geoLabel != null && !geoLabel.isEmpty()) ? geoLabel : (vid != null ? vid : "");
-        fieldMap.put("label", label);
+        // label: a vid (belso mezonev) a template META-bol
+        fieldMap.put("label", vid != null ? vid : "");
         if (vid != null) fieldMap.put("vid", vid);
         if (panids != null) fieldMap.put("masterDataField", panids);
         fieldMap.put("required", required);
@@ -150,51 +143,5 @@ public class StructureMapper {
         fieldMap.put("currentValue", currentValue);
 
         return fieldMap;
-    }
-
-    public static Map<String, String> buildLabelMap(PageModel pm, FormModel fm) {
-        Map<String, String> labelMap = new HashMap<>();
-        if (pm.z_sorted_vf == null || pm.y_sorted_df == null) return labelMap;
-
-        for (int di = 0; di < pm.y_sorted_df.size(); di++) {
-            DataFieldModel df = (DataFieldModel) pm.y_sorted_df.get(di);
-            String bestLabel = "";
-            int bestDist = Integer.MAX_VALUE;
-
-            for (int vi = 0; vi < pm.z_sorted_vf.size(); vi++) {
-                Object vfObj = pm.z_sorted_vf.get(vi);
-                if (!(vfObj instanceof VisualFieldModel vf)) continue;
-                if (vf.type != VisualFieldModel.TEXT) continue;
-                if (vf.text == null || vf.text.isEmpty()) continue;
-
-                Rectangle vfBounds = vf.getOriginalBounds();
-                if (vfBounds == null) continue;
-
-                int dx = df.x - (vfBounds.x + vfBounds.width);
-                int dy = Math.abs(df.y - vfBounds.y);
-
-                if (dx >= -5 && dx < 300 && dy < 15) {
-                    int dist = Math.abs(dx) + dy;
-                    if (dist < bestDist) {
-                        bestDist = dist;
-                        bestLabel = vf.text;
-                    }
-                }
-
-                int dxAbove = Math.abs(df.x - vfBounds.x);
-                int dyAbove = df.y - (vfBounds.y + vfBounds.height);
-                if (dxAbove < 50 && dyAbove >= 0 && dyAbove < 25) {
-                    int dist = dxAbove + dyAbove;
-                    if (dist < bestDist) {
-                        bestDist = dist;
-                        bestLabel = vf.text;
-                    }
-                }
-            }
-            if (!bestLabel.isEmpty()) {
-                labelMap.put(df.key, bestLabel.trim());
-            }
-        }
-        return labelMap;
     }
 }
