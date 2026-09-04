@@ -77,6 +77,7 @@ public class FormAnalyzerTool {
         categories.put("lakcim", new ArrayList<>());
         categories.put("bevallasi_idoszak", new ArrayList<>());
         categories.put("bankszamla", new ArrayList<>());
+        categories.put("kapcsolattarto", new ArrayList<>());
         categories.put("nyilatkozatok", new ArrayList<>());
         categories.put("osszeg_mezok", new ArrayList<>());
         categories.put("egyeb", new ArrayList<>());
@@ -131,7 +132,7 @@ public class FormAnalyzerTool {
                         fieldInfo.put("type", getTypeName(df.type));
                         if (!mask.isEmpty() && !"%".equals(mask)) fieldInfo.put("mask", mask);
 
-                        categories.get(category).add(fieldInfo);
+                        categories.computeIfAbsent(category, k -> new ArrayList<>()).add(fieldInfo);
                     }
                 }
             }

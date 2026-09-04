@@ -218,7 +218,9 @@ public class TaxpayerTools {
             """;
         return SyncToolSpecification.builder()
             .tool(ToolHelper.tool("taxpayer_apply_to_form",
-                "Alkalmazza egy adozoi profil adatait egy megnyitott nyomtatvanyra. Automatikusan kitolti az azonosito, nev, cim, stb. mezoket.",
+                "Alkalmazza egy adozoi profil adatait egy megnyitott nyomtatvanyra a template panids mezomapping alapjan (nev, adoazonosito, adoszam, cim, stb.), MINDEN dokumentum-peldanyra. "
+                + "FONTOS a helyes sorrend kotegelt nyomtatvanynal: eloszor add hozza az osszes tovabbi dokumentumot (form_add_document), es CSAK UTANA hivd ezt - igy a fedolapokra (pl. 25HIPAKM) is atkerul az azonosito adat. "
+                + "A profil-specifikus mezoket (bevallasi idoszak, onkormanyzat, nyilatkozatok, osszegek) ezutan a form_set_field / form_set_fields tool-lal add meg, a documentType parameterrel.",
                 schema).build())
             .callHandler((exchange, request) -> {
                 try {

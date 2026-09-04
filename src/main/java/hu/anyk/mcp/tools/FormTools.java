@@ -106,7 +106,10 @@ public class FormTools {
                     result.put("forms", formsList);
                     if (hasExtraDocs) {
                         result.put("note", "Kotegelt nyomtatvany: csak a fo dokumentum (isMain=true) jott letre. "
-                            + "A tovabbi dokumentumokat (pl. onkormanyzati fedolap) a form_add_document tool-lal add hozza.");
+                            + "AJANLOTT SORREND: 1) form_add_document minden szukseges tovabbi dokumentumra (pl. 25HIPAKM onkormanyzati fedolap, onkormanyzatonkent egy); "
+                            + "2) taxpayer_apply_to_form (atkerul az azonosito adat minden peldanyra); "
+                            + "3) form_set_field / form_set_fields a tobbi mezore, MINDIG documentType-pal (a fid nem globalisan egyedi!); "
+                            + "4) form_validate; 5) form_save (format=enyk -> .frm.enyk).");
                     }
 
                     return CallToolResult.builder()

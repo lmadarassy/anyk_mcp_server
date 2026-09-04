@@ -247,9 +247,18 @@ public class TemplateTools {
         for (File f : files) {
             try {
                 BookModel bm = BookModelAdapter.loadHead(f);
+                // A loadHead (getHeadData) csak a docinfo-t tolti, a bm.id/name null marad.
+                // Ezert a docinfo-bol vesszuk az id-t/nevet.
+                String id = bm.id;
+                String name = bm.name;
+                if ((id == null || id.isEmpty()) && bm.docinfo != null && bm.docinfo.get("id") != null)
+                    id = bm.docinfo.get("id").toString();
+                if ((name == null || name.isEmpty()) && bm.docinfo != null && bm.docinfo.get("name") != null)
+                    name = bm.docinfo.get("name").toString();
+
                 Map<String, Object> info = new LinkedHashMap<>();
-                info.put("id", bm.id != null ? bm.id : "");
-                info.put("name", bm.name != null ? bm.name : "");
+                info.put("id", id != null ? id : "");
+                info.put("name", name != null ? name : "");
                 info.put("templatePath", f.getAbsolutePath());
                 if (bm.docinfo != null) {
                     info.put("version", bm.docinfo.get("ver"));
