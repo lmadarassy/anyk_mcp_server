@@ -61,3 +61,11 @@ Az `abevjava.jar` `compileOnly`, ezért nincs a dist `lib/`-jében. Így a repó
 ## Megjegyzés a stdout-ról
 
 Az ÁNYK osztályok sokat írnak a `System.out`-ra, ami elrontaná az MCP stdio JSON-RPC protokollt. A szerver ezért indításkor a `System.out`-ot a stderr-re irányítja, és a valódi stdout-ot tartja fenn az MCP kommunikációnak.
+
+## CI
+
+A GitHub Actions workflow (`.github/workflows/ci.yml`) a Gradle wrapper integritását, a JDK 21 setupot, a build-script érvényességét és a publikus függőségek feloldását ellenőrzi. A **teljes fordítás CI-ban nem fut**, mert az `abevjava.jar` a NAV zárt ÁNYK szoftveréből származik, és nincs a repóban. A tényleges build lokálisan történik, ahol elérhető az ÁNYK telepítés (lásd [Build](#build)).
+
+## Licenc
+
+[MIT](LICENSE) — a licenc **csak e repó wrapper/szerver forráskódjára** vonatkozik. Az `abevjava.jar` és erőforrásai NAV-tulajdon, nem részei a repónak és nem tartoznak e licenc alá.
