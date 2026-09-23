@@ -64,7 +64,7 @@ Az ÁNYK osztályok sokat írnak a `System.out`-ra, ami elrontaná az MCP stdio 
 
 ## CI
 
-A GitHub Actions workflow (`.github/workflows/ci.yml`) a Gradle wrapper integritását, a JDK 21 setupot, a build-script érvényességét és a publikus függőségek feloldását ellenőrzi. A **teljes fordítás CI-ban nem fut**, mert az `abevjava.jar` a NAV zárt ÁNYK szoftveréből származik, és nincs a repóban. A tényleges build lokálisan történik, ahol elérhető az ÁNYK telepítés (lásd [Build](#build)).
+A GitHub Actions workflow (`.github/workflows/ci.yml`) valódi buildet futtat: ellenőrzi a Gradle wrapper integritását, beállítja a JDK 21-et, majd **build-időben letölti a NAV hivatalos ÁNYK telepítőcsomagját**, kicsomagolja belőle az `abevjava.jar`-t, és lefuttatja az `installDist`-et. A letöltött `abevjava.jar` **sosem kerül commitolásra** (a `.gitignore` kizárja) — csak a futó CI-job használja, összhangban azzal, hogy a repó nem tartalmaz jogvédett ÁNYK kódot.
 
 ## Licenc
 

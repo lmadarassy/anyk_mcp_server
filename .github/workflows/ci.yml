@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  validate:
-    name: Validate build (no abevjava.jar)
+  build:
+    name: Build (downloads abevjava.jar from NAV)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,17 +30,17 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # FONTOS: az abevjava.jar a NAV zart ANYK szoftvereből szarmazik es NINCS
-      # a repoban (compileOnly fuggoseg). Igy a teljes `compileJava` GitHubon nem
-      # futtathato. A CI azt ellenorzi, ami jar nelkul is ertelmes:
-      #   - a Gradle wrapper integritasat,
-      #   - hogy a build-script ervenyes es a konfiguracio kiertekelheto,
-      #   - hogy a publikus (mavenCentral) fuggosegek feloldhatok.
-      # A tenyleges forditas es a dist osszeallitasa lokalisan tortenik, ahol
-      # rendelkezesre all az ANYK telepites:
-      #   ./gradlew installDist -PanykHome=/eleresi/ut/az/abevjava
-      - name: Verify build configuration
-        run: ./gradlew help --stacktrace
+      # Az abevjava.jar a NAV zart ANYK szoftverebol szarmazik, ezert NINCS a
+      # repoban (compileOnly fuggoseg). A CI build-idoben letolti a hivatalos
+      # ANYK telepitocsomagot, es kicsomagolja belole az abevjava.jar-t az
+      # application/ konyvtarba. Ezt SEM commitoljuk, csak a futo job hasznalja.
+      - name: Download ANYK (abevjava.jar) from NAV
+        run: |
+          wget -q --tries=3 --timeout=120 \
+            "https://nav.gov.hu/pfile/programFile?path=/nyomtatvanyok/letoltesek/nyomtatvanykitolto_programok/nyomtatvany_apeh/keretprogramok/AbevJava" \
+            -O abevjava_install.jar
+          unzip -q -o abevjava_install.jar "application/abevjava.jar" -d anyk
+          ls -la anyk/application/abevjava.jar
 
-      - name: Resolve public dependencies
-        run: ./gradlew dependencies --configuration runtimeClasspath --stacktrace
+      - name: Build (installDist)
+        run: ./gradlew installDist -PanykHome=anyk/application --stacktrace

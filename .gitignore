@@ -19,3 +19,7 @@ Thumbs.db
 *.log
 taxpayers.json
 libs/
+
+# CI download artifacts (abevjava.jar from NAV - never commit)
+abevjava_install.jar
+anyk/
