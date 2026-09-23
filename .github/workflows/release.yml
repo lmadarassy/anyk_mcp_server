@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # A tag-bol (pl. v0.1.0) szarmaztatjuk a verziot (0.1.0).
+      - name: Derive version from tag
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # Az abevjava.jar a NAV zart ANYK szoftverebol szarmazik (compileOnly),
+      # build-idoben toltjuk le, es SOSEM commitoljuk / csomagoljuk a release-be.
+      - name: Download ANYK (abevjava.jar) from NAV
+        run: |
+          wget -q --tries=3 --timeout=120 \
+            "https://nav.gov.hu/pfile/programFile?path=/nyomtatvanyok/letoltesek/nyomtatvanykitolto_programok/nyomtatvany_apeh/keretprogramok/AbevJava" \
+            -O abevjava_install.jar
+          unzip -q -o abevjava_install.jar "application/abevjava.jar" -d anyk
+          ls -la anyk/application/abevjava.jar
+
+      - name: Build distribution zip
+        run: ./gradlew distZip -PanykHome=anyk/application -PreleaseVersion=${{ steps.ver.outputs.version }} --stacktrace
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "v${{ steps.ver.outputs.version }}"
+          generate_release_notes: true
+          files: build/distributions/anyk-mcp-server-${{ steps.ver.outputs.version }}.zip
+          body: |
+            ANYK MCP Server v${{ steps.ver.outputs.version }}
+
+            A csomag a lefordított szervert és a publikus függőségeket tartalmazza.
+            **Nem tartalmazza** az `abevjava.jar`-t (NAV-tulajdon) - azt futásidőben
+            a saját ÁNYK-telepítésedből kell a classpath-ra tenni, lásd a README-t.
+
+            ### Telepítés
+            1. Csomagold ki a `anyk-mcp-server-${{ steps.ver.outputs.version }}.zip`-et.
+            2. Állítsd be az opencode `mcp` konfigot a `lib/*` + `abevjava.jar` classpath-tal (README).
+            3. Add meg a `-Danyk.home=...` értéket a valós ÁNYK-telepítésre.

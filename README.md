@@ -66,6 +66,19 @@ Az ÁNYK osztályok sokat írnak a `System.out`-ra, ami elrontaná az MCP stdio 
 
 A GitHub Actions workflow (`.github/workflows/ci.yml`) valódi buildet futtat: ellenőrzi a Gradle wrapper integritását, beállítja a JDK 21-et, majd **build-időben letölti a NAV hivatalos ÁNYK telepítőcsomagját**, kicsomagolja belőle az `abevjava.jar`-t, és lefuttatja az `installDist`-et. A letöltött `abevjava.jar` **sosem kerül commitolásra** (a `.gitignore` kizárja) — csak a futó CI-job használja, összhangban azzal, hogy a repó nem tartalmaz jogvédett ÁNYK kódot.
 
+## Release
+
+Új verzió kiadása egy git tag pusholásával történik (`v<verzió>` formátum):
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Ez elindítja a `.github/workflows/release.yml` workflow-t, ami build-időben letölti az `abevjava.jar`-t a NAV-tól, lefuttatja a `distZip`-et, és a lefordított disztribúciós zip-et (`anyk-mcp-server-<verzió>.zip`) felcsatolja egy GitHub Release-hez. A zip a szervert és a publikus függőségeket tartalmazza, az `abevjava.jar`-t **nem** (azt futásidőben a saját ÁNYK-telepítésedből kell a classpath-ra tenni).
+
+A verzió a tag-ből származik (`v0.1.0` → `0.1.0`); tag nélküli build `0.1.0-SNAPSHOT`.
+
 ## Licenc
 
 [MIT](LICENSE) — a licenc **csak e repó wrapper/szerver forráskódjára** vonatkozik. Az `abevjava.jar` és erőforrásai NAV-tulajdon, nem részei a repónak és nem tartoznak e licenc alá.

@@ -3,6 +3,11 @@ plugins {
     application
 }
 
+// A verzio a release tag-bol jon (-PreleaseVersion=0.1.0), egyebkent SNAPSHOT.
+// Igy a git tag az egyetlen igazsagforras a verziozashoz.
+version = (findProperty("releaseVersion") as String?) ?: "0.1.0-SNAPSHOT"
+group = "hu.anyk.mcp"
+
 java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
